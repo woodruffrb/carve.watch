@@ -95,6 +95,22 @@ class BoardState {
         return connected && isFresh(RPM);
     }
 
+    //! Whether the board is actually reporting, as opposed to returning the
+    //! zeros a locked board gives out.
+    //!
+    //! A locked board answers identity reads - serial, firmware, hardware
+    //! revision - while zeroing every live value. Treating that as data
+    //! produced a critical low-battery alert against a board reading 0%, which
+    //! buzzed the watch every few seconds. No real board reports both zero
+    //! charge and zero pack voltage.
+    function hasPlausibleTelemetry() {
+        var b = peek(BATTERY_PCT);
+        var v = peek(BATTERY_V);
+        if (b != null && b > 0) { return true; }
+        if (v != null && v > 0) { return true; }
+        return false;
+    }
+
     function clearTelemetry() {
         _values = {};
         _stamps = {};

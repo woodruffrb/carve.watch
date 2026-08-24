@@ -8,5 +8,5 @@
 //!
 //! Bump this with any change that gets flashed to hardware.
 module Version {
-    const BUILD = "0.9.0";
+    const BUILD = "0.9.1";
 }

@@ -229,6 +229,38 @@ The response matches the reference algorithm exactly. Note the challenge is
 in captures minutes apart - so the first three bytes are not a random nonce
 prefix and are best understood as fixed for a given board.
 
+### A locked board reads zero
+
+Confirmed on hardware. With the handshake incomplete, every telemetry
+characteristic reads `0000` while the identity values answer normally:
+
+| Short | Value | Meaning |
+|---|---|---|
+| `01` | `b276` | serial |
+| `11` | `1045` | firmware revision (4165) |
+| `18` | `1073` | hardware revision |
+| `20` | `0001` | unknown, static |
+| everything else | `0000` | zeroed until unlocked |
+
+Two consequences.
+
+**Zeros are not data.** Alerting on them produced a critical low-battery
+warning against a board reading 0%, buzzing the watch every few seconds.
+`BoardState.hasPlausibleTelemetry()` gates the alert engine: no real board
+reports both zero charge and zero pack voltage.
+
+**Identity reads succeeding proves nothing about the unlock.** Serial and
+firmware answer on a locked board, so a successful read - or a successful
+write of the response - is not evidence the handshake took. Only live
+telemetry appearing is.
+
+### Write the response acknowledged
+
+`e659f3ff` advertises property `WRITE`, not `WRITE NO RESPONSE`, so it wants
+an acknowledged write. Connect IQ's `WRITE_TYPE_DEFAULT` is the
+unacknowledged form; use `WRITE_TYPE_WITH_RESPONSE`. A board that requires
+acknowledgement will discard a byte-perfect response silently otherwise.
+
 ### Detecting success
 
 **A successful response write is the proof, not an incoming notification.**

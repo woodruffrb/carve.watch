@@ -78,6 +78,15 @@ class AlertEngine {
     function evaluate(state, linkState) {
         _active = [];
 
+        // Silence everything when the board is not really reporting. A locked
+        // board reads zero on every telemetry characteristic, and alerting on
+        // that means a critical battery warning buzzing every few seconds
+        // against a board that is simply not talking yet.
+        if (!state.hasPlausibleTelemetry()) {
+            _latched = {};
+            return;
+        }
+
         checkHeadroom(state);
         checkError(state);
         checkTemp(state);

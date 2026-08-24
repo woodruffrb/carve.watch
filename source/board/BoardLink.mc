@@ -414,8 +414,16 @@ class BoardLink extends Ble.BleDelegate {
             requestChallenge();
         }
 
-        if (_state == STATE_LIVE) {
-            pollNext();
+        // Poll while unlocking as well. Without reads there is no way to see
+        // the handshake take effect, and guessing at it is what produced a
+        // "live" ride screen over a wall of zeros.
+        pollNext();
+
+        if (_state == STATE_UNLOCKING && _boardState.hasPlausibleTelemetry()) {
+            _state = STATE_LIVE;
+            _boardState.unlocked = true;
+            _spanSolved = _spanVariant;
+            _unlockAttempts = 0;
         }
         pump();
     }
@@ -498,7 +506,13 @@ class BoardLink extends Ble.BleDelegate {
             if (op[:kind] == :read) {
                 ch.requestRead();
             } else if (op[:kind] == :write) {
-                ch.requestWrite(op[:value], { :writeType => Ble.WRITE_TYPE_DEFAULT });
+                // WITH_RESPONSE, not DEFAULT. The GATT dump shows f3ff with
+                // property WRITE (acknowledged), not WRITE NO RESPONSE, and
+                // DEFAULT is the unacknowledged form - a board that requires
+                // an acknowledged write would discard a byte-perfect response
+                // silently, which is exactly what is happening.
+                ch.requestWrite(op[:value],
+                    { :writeType => Ble.WRITE_TYPE_WITH_RESPONSE });
             } else if (op[:kind] == :subscribe) {
                 var cccd = ch.getDescriptor(Ble.cccdUuid());
                 if (cccd == null) {
@@ -762,13 +776,15 @@ class BoardLink extends Ble.BleDelegate {
     //! So going live here and polling is correct. If the unlock had in fact
     //! failed, the polled values would be stale and isLive() would say so.
     function onCharacteristicWrite(characteristic, status) {
+        // A write completing only means the board received it. On hardware
+        // every telemetry characteristic still read 0000 afterwards while the
+        // identity values - serial, firmware, hardware revision - read fine,
+        // which is a locked board acknowledging a response it did not accept.
+        // Real telemetry is the only honest proof, so polling starts here and
+        // the state changes when values actually appear.
         if (_state == STATE_UNLOCKING
             && status == Ble.STATUS_SUCCESS
             && characteristic.getUuid().equals(BoardUuids.uuid(BoardUuids.UART_WRITE))) {
-            _state = STATE_LIVE;
-            _boardState.unlocked = true;
-            _spanSolved = _spanVariant;
-            _unlockAttempts = 0;
             buildPollList();
         }
         complete();
