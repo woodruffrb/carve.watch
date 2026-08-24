@@ -48,6 +48,11 @@ class BoardLink extends Ble.BleDelegate {
     //! normal keepalive take over once the link is live.
     static const SEARCH_CHALLENGE_MS = 2500;
 
+    //! How long to let the board act on a written response before concluding
+    //! the handshake did not take. The reference client waits 0.5 s; this is
+    //! deliberately longer because reads here are queued behind a poll cycle.
+    static const UNLOCK_SETTLE_MS = 6000;
+
     //! How long to wait for a first challenge before concluding the board
     //! does not use the handshake at all.
     //!
@@ -152,6 +157,8 @@ class BoardLink extends Ble.BleDelegate {
     //! same bytes. Without showing them that is unanswerable, and it has
     //! already been guessed at once too often.
     private var _lastResponse as Lang.ByteArray = []b;
+    private var _unlockSentMs = 0;
+    private var _awaitingTelemetry = false;
 
     private var _spanAttempt = 0;
     private var _spanVariant = 0;
@@ -387,7 +394,21 @@ class BoardLink extends Ble.BleDelegate {
             _handshakeSkipped = true;
         }
 
-        // Search fast, then settle into the ride-time keepalive.
+        // Once a response has been written, give the board time to act on it
+        // rather than immediately provoking another challenge. Only restart
+        // the handshake if telemetry has not appeared after the settle window.
+        if (_awaitingTelemetry) {
+            if ((now - _unlockSentMs) < UNLOCK_SETTLE_MS) {
+                pollNext();
+                pump();
+                return;
+            }
+            // Settled with nothing to show: start over cleanly.
+            _awaitingTelemetry = false;
+            _lastUnlockMs = 0;
+            enqueue({ :kind => :subscribe, :char => BoardUuids.UART_READ });
+        }
+
         var interval = (_state == STATE_UNLOCKING && _spanSolved < 0)
             ? SEARCH_CHALLENGE_MS
             : KEEPALIVE_MS;
@@ -513,6 +534,15 @@ class BoardLink extends Ble.BleDelegate {
                 // silently, which is exactly what is happening.
                 ch.requestWrite(op[:value],
                     { :writeType => Ble.WRITE_TYPE_WITH_RESPONSE });
+            } else if (op[:kind] == :unsubscribe) {
+                var off = ch.getDescriptor(Ble.cccdUuid());
+                if (off == null) {
+                    _busy = false;
+                    dropHead();
+                    pump();
+                    return;
+                }
+                off.requestWrite([0x00, 0x00]b);
             } else if (op[:kind] == :subscribe) {
                 var cccd = ch.getDescriptor(Ble.cccdUuid());
                 if (cccd == null) {
@@ -713,6 +743,8 @@ class BoardLink extends Ble.BleDelegate {
             _spanAttempt = 0;
             _lastFrame = []b;
             _lastResponse = []b;
+            _awaitingTelemetry = false;
+            _unlockSentMs = 0;
             _queue = [];
             _busy = false;
 
@@ -785,6 +817,15 @@ class BoardLink extends Ble.BleDelegate {
         if (_state == STATE_UNLOCKING
             && status == Ble.STATUS_SUCCESS
             && characteristic.getUuid().equals(BoardUuids.uuid(BoardUuids.UART_WRITE))) {
+            // The reference client stops listening on the UART characteristic
+            // once the response is written, waits briefly, then reads. That
+            // final step was missing here, and worse: a fresh challenge was
+            // being requested every 2.5 s, so each successful unlock was
+            // immediately torn down and restarted. Hammering the handshake
+            // was preventing the handshake.
+            _unlockSentMs = System.getTimer();
+            _awaitingTelemetry = true;
+            enqueue({ :kind => :unsubscribe, :char => BoardUuids.UART_READ });
             buildPollList();
         }
         complete();

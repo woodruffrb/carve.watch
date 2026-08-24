@@ -229,6 +229,36 @@ The response matches the reference algorithm exactly. Note the challenge is
 in captures minutes apart - so the first three bytes are not a random nonce
 prefix and are best understood as fixed for a given board.
 
+### The full sequence, from a working client
+
+Taken from a reference Python client rather than from prose about it:
+
+1. Subscribe to the UART read characteristic
+2. Read the firmware revision
+3. Write the firmware revision back - this provokes the challenge
+4. Wait for the 20-byte challenge on the UART notification
+5. Write `challenge[0..2] ++ MD5(challenge[3..18] ++ key) ++ xor` to UART write
+6. **Unsubscribe from the UART read characteristic**
+7. Wait ~0.5 s, then read telemetry
+
+**Step 6 is easy to miss and it matters.** Success is never acknowledged -
+you write, stop listening, pause, and read. Leaving the subscription open
+and re-provoking a fresh challenge on a timer tears the unlock down as fast
+as it is established; hammering the handshake prevents the handshake.
+
+Only re-run the sequence if telemetry fails to appear after the settle
+window, and re-subscribe as part of doing so.
+
+### Firmware and whether the handshake is needed at all
+
+The challenge-response arrived with the **Gemini** firmware. The reference
+board here reports `0x1045` = **4165**, which predates it, so it is not
+certain this board requires an unlock at all - the 20-byte UART frames may
+not be gating telemetry the way they do on Gemini and later.
+
+Do not assume the handshake is the reason telemetry is missing until the
+sequence above has been run correctly, including step 6.
+
 ### A locked board reads zero
 
 Confirmed on hardware. With the handshake incomplete, every telemetry
