@@ -22,6 +22,7 @@ class CarveApp extends Application.AppBase {
     private var _recorder;
     private var _tick;
     private var _view;
+    private var _registered = false;
 
     function initialize() {
         AppBase.initialize();
@@ -35,13 +36,15 @@ class CarveApp extends Application.AppBase {
         _recorder = new RideRecorder();
         _link     = new BoardLink(_state);
 
-        // Order matters: the delegate has to be installed before any GATT
-        // work. Profile registration is asynchronous, so the scan really
-        // starts from BoardLink.onProfileRegister - this call is the path for
-        // the case where registration has somehow already completed.
+        // The delegate must be installed before any GATT work.
+        //
+        // Registration itself is deferred to the first tick rather than run
+        // here. Calling registerProfile from onStart puts it before the app is
+        // fully resident, and the observed failure - accepted, then no
+        // callback and no exception - is consistent with the request being
+        // issued too early to be serviced. Deferring costs one second and
+        // removes that variable.
         Ble.setDelegate(_link);
-        _link.registerProfiles();
-        _link.startScan();
 
         Fields.resetSession();
 
@@ -68,6 +71,11 @@ class CarveApp extends Application.AppBase {
     //! Return type is explicit because Timer.start requires a
     //! `Method() as Void` and infers `as Any` without it.
     function onTick() as Void {
+        if (!_registered) {
+            _registered = true;
+            _link.registerProfiles();
+        }
+
         _link.onTick();
 
         if (_state.isLive()) {

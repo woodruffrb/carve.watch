@@ -33,19 +33,19 @@ expands it.
 
 ## Before debugging anything on the watch
 
-**Bluetooth must be enabled on the watch itself.** With the radio off,
-`BluetoothLowEnergy.registerProfile()` is accepted and then does nothing -
-no exception, no `onProfileRegister` callback - and every diagnostic points
-at the profile definition instead of the radio. Three separate theories
-(characteristic count, profile budget, descriptor list) were investigated
-before the radio turned out to be off.
+**The board accepts only one BLE connection.** The phone must not be holding
+it, so turn the *phone's* Bluetooth off or force-quit the board app. The
+*watch's* Bluetooth is a separate thing and must stay on.
 
-Diagnostics page 1 shows a `phone` row as a proxy. If it reads `no`, fix
-that before reading anything else on the page.
+Be careful reading `phoneConnected` as a proxy for the watch radio: it is
+false whenever no phone is paired, which is the normal state once the phone's
+own radio is off. It does not indicate anything about the watch's radio, and
+an earlier build wrongly told users to "CHECK BT" on the strength of it.
 
-Note that the *phone's* Bluetooth is a separate matter: the board accepts
-only one BLE connection, so the phone must not be holding it. Watch radio
-on, phone radio off.
+Diagnostics page 1 shows `ble conn`, from `getAvailableConnectionCount()`.
+That is a direct probe of the BLE subsystem: a number means BLE is up and any
+fault is in the profile definition; `err` means the subsystem itself is
+refusing, which is a different problem entirely.
 
 ## Advertising
 

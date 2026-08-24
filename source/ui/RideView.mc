@@ -167,12 +167,12 @@ class RideView extends WatchUi.View {
             case BoardLink.STATE_UNLOCKING:
                 msg = "HANDSHAKE"; break;
             case BoardLink.STATE_PROFILE_FAILED:
-                // A disabled watch radio makes registerProfile fail silently,
-                // and "BLE ERROR" tells a user nothing they can act on. If the
-                // phone link is also down the radio is the likely cause, so
-                // point at the thing they can actually fix.
-                msg = System.getDeviceSettings().phoneConnected
-                    ? "BLE ERROR" : "CHECK BT";
+                // Deliberately not inferring a cause here. phoneConnected only
+                // reports whether a phone is paired - it is false whenever the
+                // phone's own radio is off, which says nothing about the
+                // watch's. An earlier build read it as "radio off" and told
+                // users to check a setting that was already correct.
+                msg = "BLE ERROR";
                 color = Theme.danger;
                 break;
             case BoardLink.STATE_IDLE:

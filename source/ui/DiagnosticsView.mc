@@ -2,6 +2,7 @@ using Toybox.WatchUi;
 using Toybox.Graphics;
 using Toybox.System;
 using Toybox.Lang;
+using Toybox.BluetoothLowEnergy as Ble;
 
 //! On-device protocol diagnostics.
 //!
@@ -102,7 +103,13 @@ class DiagnosticsView extends WatchUi.View {
             [ "build",     Version.BUILD ],
             [ "reg err",   trunc(_link.getLastError(), 14) ],
             [ "cccd",      _link.usesDescriptors() ? "yes" : "no" ],
-            [ "phone",     System.getDeviceSettings().phoneConnected ? "conn" : "no" ]
+            // getAvailableConnectionCount is a direct probe of whether the
+            // BLE subsystem is alive at all, unlike phoneConnected which only
+            // reports phone pairing and is false whenever the phone's radio
+            // is off. A non-zero count means BLE is up and the fault is in
+            // the profile; zero or "err" means the subsystem itself is not.
+            [ "ble conn",  bleConnProbe() ],
+            [ "phone",     System.getDeviceSettings().phoneConnected ? "conn" : "none" ]
         ];
 
         var top = h * 0.26;
@@ -186,6 +193,15 @@ class DiagnosticsView extends WatchUi.View {
         if (s.length() == 0) { return "-"; }
         if (s.length() <= n) { return s; }
         return s.substring(0, n);
+    }
+
+    private function bleConnProbe() as Lang.String {
+        try {
+            return Ble.getAvailableConnectionCount().format("%d");
+        } catch (ex) {
+            var m = ex.getErrorMessage();
+            return (m == null) ? "err" : trunc(m, 10);
+        }
     }
 
     private function fmt(v) {
