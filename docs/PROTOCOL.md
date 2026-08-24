@@ -31,6 +31,58 @@ All characteristics share the `e659fXXX-ea98-11e3-ac10-0800200c9a66` pattern;
 only the third group varies, so the code stores the 16-bit short form and
 expands it.
 
+## BLOCKER: Connect IQ BLE is non-functional on the test fenix 6X
+
+Status as of 2026-08-23. **This blocks the project on this device.** Read
+this before spending any time on the app's BLE code.
+
+On the reference watch - fenix 6X Sapphire, firmware 28.02, Connect IQ
+5.1.1 - the Connect IQ BLE callback path does not work at all:
+
+| Observation | Result |
+|---|---|
+| `getAvailableConnectionCount()` | returns 3 - subsystem answers |
+| `setDelegate()` | succeeds, no throw |
+| `registerProfile()` | accepted, no throw |
+| `onProfileRegister` | **never invoked**, 0 callbacks / 3 timeouts |
+| Scanning | **zero** results, with many BLE devices nearby |
+| Watch radio | fine - phone paired, "find my phone" works |
+
+**This is not carve's bug.** Garmin's own `NordicThingy52` sample, built
+from the SDK unmodified and sideloaded to the same watch, shows 0 devices
+and never registers either. Any app-side theory is refuted by that.
+
+Ruled out by measurement, in order: characteristic count, profile budget,
+descriptor lists, the radio being off, stale app UUID metadata, registration
+timing, and the profile Dictionary structure - which was checked
+key-for-key against the SDK sample and is identical.
+
+### Related known Garmin issues
+
+- An acknowledged bug report states BLE peripherals advertising as **"LE
+  Only"** fail to appear in Connect IQ scans. The board advertises exactly
+  that: `Device type: LE only`, `BR/EDR Not Supported`. No fix documented.
+- A separate report describes fenix 6X Pro scanning working "very
+  intermittently", and peripherals advertising **128-bit** service UUIDs
+  not surfacing while 16-bit advertisers do. The board's service UUID is
+  128-bit.
+
+Neither fully explains scanning returning nothing *and* registration never
+calling back, which suggests a firmware regression rather than the
+advertising-format limitation alone.
+
+### What would actually move this forward
+
+1. **Firmware.** Check for a fenix 6X update; this smells like a regression.
+2. **A second device.** fenix 7 / 8 or epix would establish whether this is
+   specific to fenix 6X. The app builds clean for 20 devices already.
+3. **Report it.** With the SDK sample failing identically, this is a clean
+   reproduction to hand Garmin.
+
+Until CIQ BLE works on some device, no amount of protocol work matters -
+the unlock handshake and the characteristic map below remain untested
+because nothing can connect.
+
 ## Before debugging anything on the watch
 
 **The board accepts only one BLE connection.** The phone must not be holding
