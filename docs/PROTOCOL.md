@@ -102,18 +102,37 @@ from what they *mean*:
 The UART pair is now verified, which removes the largest single risk in the
 handshake: the response is being written to the right characteristic.
 
-### The 0x2901 descriptors are the remaining shortcut
+### The 0x2901 descriptors are a dead end - do not retry this
 
-Every characteristic carries a **Characteristic User Description**
-(`0x2901`) - the board self-describes each value with a human-readable name.
-Reading those descriptors yields the authoritative name for every UUID and
-would retire every remaining **[C]** tag in the table above at a stroke.
+Every characteristic carries a Characteristic User Description (`0x2901`),
+which looks like it should name each value. It does not. Read back on an XR
+they return `Data#N`, where N is simply the low byte of the UUID in decimal:
 
-Connect IQ cannot help here: it only reaches characteristics registered up
-front, so the watch cannot enumerate what it does not already know. Read them
-from a phone (nRF Connect: tap the download arrow beside each
-*Characteristic User Description* row) or from
-`chrome://bluetooth-internals`.
+| Characteristic | 0x2901 value |
+|---|---|
+| `e659f31e` | `Data#30` |
+| `e659f31f` | `Data#31` |
+| `e659f320` | `Data#32` |
+
+`0x1e` = 30, `0x1f` = 31, `0x20` = 32. They are auto-generated indices with no
+semantic content - the firmware never populated real names. Checked
+2026-08-23; do not spend time here again unless a much later firmware is
+known to have filled them in.
+
+**Identification is therefore empirical.** Read a characteristic's value while
+the board is in a state you can verify independently, and match. The
+discriminating moves:
+
+- **Battery**: compare against the percentage the stock app reports.
+- **RPM**: zero at rest, non-zero while the wheel is spun by hand. This is the
+  cleanest single test, because spinning the wheel changes almost nothing
+  else.
+- **Trip odometer**: compare against the stock app, and check it increments
+  over a short push.
+- **Temperature**: near ambient on a cold board, climbing after a ride.
+
+Values render as big-endian byte pairs - `(0x) 00-01` is 1 - which is
+consistent with the uint16 decoding in `BoardLink.decode()`.
 
 ## The unlock handshake
 
