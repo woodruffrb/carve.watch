@@ -335,12 +335,36 @@ class BoardLink extends Ble.BleDelegate {
     function isUnlockUnverified() as Lang.Boolean { return _unlockUnverified; }
     function getSpanSolved() as Lang.Number { return _spanSolved; }
 
+    //! A characteristic gets a CCCD only if it is in the notify set AND
+    //! present in the tier being registered.
+    //!
+    //! Descriptors are the scarce resource, so a narrower tier has to actually
+    //! carry fewer of them - otherwise falling back reduces the characteristic
+    //! count while leaving the descriptor count untouched, and the fallback
+    //! achieves nothing.
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
         for (var i = 0; i < notifyList.size(); i++) {
             if (short.equals(notifyList[i])) { return true; }
         }
         return false;
+    }
+
+    //! The notify characteristics that exist in the registered tier. Anything
+    //! outside it has no CCCD and cannot be subscribed.
+    private function activeNotifyList() as Lang.Array {
+        var wanted = BoardUuids.notifyCharacteristics();
+        var out = [];
+        for (var i = 0; i < wanted.size(); i++) {
+            var w = wanted[i] as Lang.String;
+            for (var j = 0; j < _registered.size(); j++) {
+                if (w.equals(_registered[j])) {
+                    out.add(w);
+                    break;
+                }
+            }
+        }
+        return out;
     }
 
     //! Scanning before onProfileRegister has confirmed is wasted work: a
@@ -799,7 +823,7 @@ class BoardLink extends Ble.BleDelegate {
             // poll list already covers them.
             // Subscribe to everything that publishes. This is how telemetry
             // arrives; without it the board appears to report nothing at all.
-            var notify = BoardUuids.notifyCharacteristics();
+            var notify = activeNotifyList();
             for (var i = 0; i < notify.size(); i++) {
                 enqueue({ :kind => :subscribe, :char => notify[i] });
             }

@@ -56,22 +56,38 @@ module BoardUuids {
     //! never as the first attempt.
     //!
     //! Returns null past the last tier, which BoardLink treats as fatal.
-    //! Widest first, because discovery is the point again.
+    //! Descending by descriptor cost, not by characteristic count.
     //!
-    //! The full sweep was dropped while chasing a registration failure that
-    //! turned out to be a wrong device target - so "34 characteristics is too
-    //! many" was never actually tested on the right hardware and is not a
-    //! finding. Registration now works, and without the sweep the raw
-    //! diagnostics can only show characteristics already guessed at, which is
-    //! useless for confirming a map that is mostly unverified.
-    //!
-    //! The timeout fallback handles a refusal, so trying wide costs a few
-    //! seconds at worst.
+    //! The wide f301-f320 sweep is retired. It existed to discover
+    //! characteristics by polling them, and polling a notify characteristic
+    //! returns zero - so it could never have found anything. Subscriptions are
+    //! what reveal live values, and each one costs a CCCD, which is the
+    //! genuinely scarce resource. Widening the notify set to eight while a
+    //! 34-characteristic sweep was still registered pushed the descriptor
+    //! count to nine and broke connection entirely.
     function tier(index as Lang.Number) as Lang.Array? {
-        if (index == 0) { return sweepTo(0x20); }  // 34 - full discovery
-        if (index == 1) { return sweepTo(0x13); }  // 21 - half
-        if (index == 2) { return essential(); }    // 10 - app functional
+        if (index == 0) { return essential(); }   // 13 chars,  9 CCCDs
+        if (index == 1) { return core(); }        //  9 chars,  4 CCCDs
+        if (index == 2) { return minimal(); }     //  6 chars,  2 CCCDs
         return null;
+    }
+
+    //! Fallback when the full notify set will not register. Keeps the values
+    //! the ride screen cannot do without and drops the rest, which lowers the
+    //! descriptor count as much as the characteristic count - descriptors
+    //! being the part that is actually scarce.
+    function core() as Lang.Array {
+        return [
+            UART_READ,
+            UART_WRITE,
+            SERIAL_NUMBER,
+            FIRMWARE_REV,
+            HARDWARE_REV,
+            BATTERY_PCT,
+            RPM,
+            TRIP_ODOMETER,
+            STATUS_ERROR
+        ];
     }
 
     //! Last resort: the handshake pair plus the three values without which
