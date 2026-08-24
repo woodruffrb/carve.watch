@@ -40,22 +40,41 @@ module BoardUuids {
     //! by behaviour when a UUID guess is wrong. Tier 2 is the minimum the
     //! shipped field set needs.
     //!
+    //! A descending ladder. BoardLink walks it until one registers.
+    //!
+    //! The top rungs are contiguous sweeps for discovery - they let
+    //! Diagnostics identify a characteristic by behaviour. The lower rungs
+    //! switch to the specific non-contiguous set the app needs, because a
+    //! narrow contiguous sweep would exclude RPM, status and headroom and
+    //! leave the app connected but useless.
+    //!
+    //! Measured on hardware: 34 characteristics is silently refused by a
+    //! fenix 6X - no throw, no callback. The real limit is discovered by
+    //! walking down, and whichever rung sticks is shown on Diagnostics page 1,
+    //! so the ceiling gets recorded rather than guessed at.
+    //!
     //! Returns null past the last tier, which BoardLink treats as fatal.
     function tier(index as Lang.Number) as Lang.Array? {
-        if (index == 0) { return fullSweep(); }
-        if (index == 1) { return halfSweep(); }
-        if (index == 2) { return essential(); }
+        if (index == 0) { return sweepTo(0x20); }   // 34 - full discovery
+        if (index == 1) { return sweepTo(0x16); }   // 24
+        if (index == 2) { return sweepTo(0x0e); }   // 16
+        if (index == 3) { return sweepTo(0x0a); }   // 12
+        if (index == 4) { return essential(); }     // 10 - app functional
+        if (index == 5) { return minimal(); }       //  6 - handshake + core
         return null;
     }
 
-    //! Every characteristic the board exposes, f301 through f320, plus the
-    //! UART pair. Confirmed contiguous by GATT dump.
-    function fullSweep() as Lang.Array {
-        return sweepTo(0x20);
-    }
-
-    function halfSweep() as Lang.Array {
-        return sweepTo(0x13);
+    //! Last resort: the handshake pair plus the three values without which
+    //! the ride screen has nothing to say.
+    function minimal() as Lang.Array {
+        return [
+            UART_READ,
+            UART_WRITE,
+            FIRMWARE_REV,
+            BATTERY_PCT,
+            RPM,
+            STATUS_ERROR
+        ];
     }
 
     // Module scope has no `private` in Monkey C; this is internal by convention.

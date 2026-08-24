@@ -95,7 +95,9 @@ class DiagnosticsView extends WatchUi.View {
             [ "bad frame", _link.getBadFrames().format("%d") ],
             [ "sent",      _link.getResponsesSent().format("%d") ],
             [ "tier",      _link.getTierIndex().format("%d")
-                           + " (" + _link.getRegistered().size().format("%d") + ")" ],
+                           + " (" + _link.getRegistered().size().format("%d") + ")"
+                           + (_link.isProfileReady() ? " ok" : " ...") ],
+            [ "reg try",   _link.getRegisterAttempts().format("%d") ],
             [ "fw",        fmt(state.peek(BoardState.FIRMWARE)) ]
         ];
 

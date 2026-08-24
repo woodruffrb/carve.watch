@@ -40,6 +40,16 @@ class BoardLink extends Ble.BleDelegate {
     //! wheel; the queue bound stops it running away.
     static const POLLS_PER_TICK = 4;
 
+    //! How long to wait for onProfileRegister before assuming the request was
+    //! dropped.
+    //!
+    //! An over-wide registration does not always fail loudly. On hardware it
+    //! can neither throw nor call back at all, which left the app parked in
+    //! STATE_IDLE forever waiting on a callback that was never coming - it
+    //! showed as a permanent "OFFLINE" with no indication why. Silence is
+    //! therefore treated as failure, and falls back to a narrower tier.
+    static const REGISTER_TIMEOUT_MS = 4000;
+
     private var _state = STATE_IDLE;
     private var _device = null;
     private var _profileReady = false;
@@ -57,6 +67,8 @@ class BoardLink extends Ble.BleDelegate {
 
     private var _tierIndex = 0;
     private var _registered as Lang.Array = [];
+    private var _registerPendingSince = 0;
+    private var _registerAttempts = 0;
 
     // ---- handshake instrumentation --------------------------------------
     // Read by DiagnosticsView. Without these a stalled handshake is opaque:
@@ -109,6 +121,8 @@ class BoardLink extends Ble.BleDelegate {
 
         _tierIndex = index;
         _registered = shortForms;
+        _registerAttempts++;
+        _registerPendingSince = System.getTimer();
 
         var chars = [];
         var notify = BoardUuids.notifyCharacteristics();
@@ -136,11 +150,26 @@ class BoardLink extends Ble.BleDelegate {
         }
     }
 
+    //! A registration that neither threw nor called back is a dropped
+    //! registration. Give it up as failed and try something narrower.
+    private function checkRegistrationTimeout() as Void {
+        if (_profileReady) { return; }
+        if (_state == STATE_PROFILE_FAILED) { return; }
+        if (_registerPendingSince == 0) { return; }
+
+        if (System.getTimer() - _registerPendingSince < REGISTER_TIMEOUT_MS) {
+            return;
+        }
+        tryRegisterTier(_tierIndex + 1);
+    }
+
     //! Which characteristics actually registered, and at which tier. Shown in
     //! Diagnostics so a narrow sweep is visible rather than looking like
     //! missing data.
     function getRegistered() as Lang.Array { return _registered; }
     function getTierIndex() as Lang.Number { return _tierIndex; }
+    function getRegisterAttempts() as Lang.Number { return _registerAttempts; }
+    function isProfileReady() as Lang.Boolean { return _profileReady; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
@@ -182,6 +211,11 @@ class BoardLink extends Ble.BleDelegate {
     // =====================================================================
 
     function onTick() {
+        // Checked before the state guard on purpose: registration happens
+        // while the link is still IDLE, so a guard-first tick would never
+        // notice a dropped registration.
+        checkRegistrationTimeout();
+
         if (_state != STATE_LIVE && _state != STATE_UNLOCKING) {
             return;
         }
