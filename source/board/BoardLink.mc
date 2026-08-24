@@ -479,12 +479,7 @@ class BoardLink extends Ble.BleDelegate {
         // "live" ride screen over a wall of zeros.
         pollNext();
 
-        if (_state == STATE_UNLOCKING && _boardState.hasPlausibleTelemetry()) {
-            _state = STATE_LIVE;
-            _boardState.unlocked = true;
-            _spanSolved = _spanVariant;
-            _unlockAttempts = 0;
-        }
+
         pump();
     }
 
@@ -933,7 +928,12 @@ class BoardLink extends Ble.BleDelegate {
         captureRaw(uuid, value);
 
         if (uuid.equals(BoardUuids.uuid(BoardUuids.BATTERY_PCT))) {
-            _boardState.put(BoardState.BATTERY_PCT, value[0]);
+            // Byte 1, not byte 0. The reference client reads this as
+            // FORMAT_UINT8 at offset 1 - the low half of a big-endian pair -
+            // and reading byte 0 yields a constant zero, which would have
+            // shown 0% forever even once notifications were working.
+            _boardState.put(BoardState.BATTERY_PCT,
+                (value.size() > 1) ? value[1] : value[0]);
 
         } else if (uuid.equals(BoardUuids.uuid(BoardUuids.RPM))) {
             _boardState.put(BoardState.RPM, u16(value));
@@ -944,11 +944,18 @@ class BoardLink extends Ble.BleDelegate {
             _boardState.put(BoardState.TRIP_REVS, u16(value));
 
         } else if (uuid.equals(BoardUuids.uuid(BoardUuids.TEMPERATURE))) {
-            // High byte is the controller, low byte the motor.
-            _boardState.put(BoardState.MOTOR_TEMP, value[value.size() - 1]);
+            // Two uint8s: controller at offset 0, motor at offset 1.
+            _boardState.put(BoardState.MOTOR_TEMP,
+                (value.size() > 1) ? value[1] : value[0]);
+            _boardState.put(BoardState.CONTROLLER_TEMP, value[0]);
 
         } else if (uuid.equals(BoardUuids.uuid(BoardUuids.BATTERY_VOLTS))) {
             _boardState.put(BoardState.BATTERY_V, u16(value) / 10.0);
+
+        } else if (uuid.equals(BoardUuids.uuid(BoardUuids.CURRENT_AMPS))) {
+            // Signed short in milliamps, scaled by a board-specific factor:
+            // 0.9 for the original, 1.8 for the Plus generation.
+            _boardState.put(BoardState.CURRENT_A, (s16(value) / 1000.0) * 0.9);
 
         } else if (uuid.equals(BoardUuids.uuid(BoardUuids.SAFETY_HEADROOM))) {
             _boardState.put(BoardState.HEADROOM, value[0]);
@@ -974,6 +981,13 @@ class BoardLink extends Ble.BleDelegate {
                 return;
             }
         }
+    }
+
+    //! Signed 16-bit big-endian, for current draw which goes negative on
+    //! regen braking.
+    private function s16(value as Lang.ByteArray) as Lang.Number {
+        var v = u16(value);
+        return (v > 32767) ? (v - 65536) : v;
     }
 
     private function u16(value as Lang.ByteArray) as Lang.Number {

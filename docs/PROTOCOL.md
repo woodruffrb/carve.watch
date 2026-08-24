@@ -281,6 +281,40 @@ uniform zeros across every telemetry characteristic while serial, firmware
 and hardware read perfectly - which is exactly the symptom that was
 misdiagnosed here as a locked board.
 
+### Decoding, from the reference client's source
+
+Read out of a working implementation rather than inferred:
+
+| Value | Characteristic | Decode |
+|---|---|---|
+| Battery % | `f303` | **uint8 at offset 1** - not offset 0 |
+| Speed | `f30b` | uint16 BE, wheel RPM |
+| Trip odometer | `f30a` | uint16 BE, **tire revolutions** |
+| Controller temp | `f310` | uint8 at offset 0 |
+| Motor temp | `f310` | uint8 at offset 1 |
+| Pack voltage | `f316` | uint16 BE / 10 |
+| Current | `f312` | **int16** BE / 1000, x0.9 (x1.8 on Plus) |
+| Pitch / roll / yaw | `f307`-`f309` | uint16 BE, degrees |
+
+**Battery at offset 1 is the one that bites.** Byte 0 of that pair is always
+zero, so reading it gives a permanent 0%, which is indistinguishable from a
+board that is not reporting.
+
+Safety headroom `f317` is decoded as uint8 at offset 0, but the reference
+client does not subscribe to it and it is absent from both its read and
+notify lists - so do not expect it to publish.
+
+### Do not gate link state on decoded values
+
+An earlier version here treated "battery or voltage above zero" as proof the
+link was alive. Battery was being decoded from the wrong byte, so the value
+was always zero and a perfectly working subscription was reported as a dead
+link - a decode bug masquerading as a connection failure for several
+debugging rounds.
+
+A notification arriving is proof the subscription works. Judge the link by
+that. Value sanity belongs in the alert logic, not in connection state.
+
 ### Corrections to the community map
 
 Two entries that were wrong here, from reading a working client:

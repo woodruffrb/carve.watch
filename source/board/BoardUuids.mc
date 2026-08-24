@@ -149,15 +149,17 @@ module BoardUuids {
     //! Polling a notify characteristic is worse than useless here: the zero it
     //! returns overwrites the real value a notification just delivered.
     function notifyCharacteristics() as Lang.Array {
+        // Matches the reference client's notify list, trimmed to what this
+        // app displays. Safety headroom is deliberately absent: the reference
+        // does not subscribe it, so it is unlikely to be published, and each
+        // subscription costs a CCCD - the scarce resource here.
         return [
             BATTERY_PCT,
             RPM,
             TRIP_ODOMETER,
             STATUS_ERROR,
             TEMPERATURE,
-            BATTERY_VOLTS,
-            SAFETY_HEADROOM,
-            CURRENT_AMPS
+            BATTERY_VOLTS
         ];
     }
 

@@ -25,6 +25,8 @@ class BoardState {
     static const STATUS_FLAGS  = :statusFlags;
     static const LAST_ERROR    = :lastErrorCode;
     static const FIRMWARE      = :firmwareRev;
+    static const CONTROLLER_TEMP = :controllerTempC;
+    static const CURRENT_A     = :currentAmps;
 
     var connected = false;
     var unlocked  = false;
@@ -101,7 +103,7 @@ class BoardState {
     }
 
     function isLive() {
-        return connected && isFresh(RPM);
+        return connected && (isFresh(RPM) || isFresh(BATTERY_PCT));
     }
 
     //! Whether the board is actually reporting, as opposed to returning the
