@@ -103,6 +103,9 @@ class DiagnosticsView extends WatchUi.View {
             [ "build",     Version.BUILD ],
             [ "reg err",   trunc(_link.getLastError(), 14) ],
             [ "cccd",      _link.usesDescriptors() ? "yes" : "no" ],
+            [ "reg cb",    _link.getProfileCallbacks().format("%d")
+                           + "/" + _link.getTimeouts().format("%d") + "t" ],
+            [ "status",    _link.getLastStatus().format("%d") ],
             // getAvailableConnectionCount is a direct probe of whether the
             // BLE subsystem is alive at all, unlike phoneConnected which only
             // reports phone pairing and is false whenever the phone's radio

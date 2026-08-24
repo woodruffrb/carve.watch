@@ -94,6 +94,18 @@ class BoardLink extends Ble.BleDelegate {
     private var _lastError as Lang.String = "";
     private var _useDescriptors = true;
 
+    // Registration outcome instrumentation.
+    //
+    // The earlier "timeout" label was set in the tiers-exhausted branch, not
+    // where a timeout actually happened, so it reported the same string
+    // whether onProfileRegister returned a failure status or was never called
+    // at all. Those are different faults with different fixes, and conflating
+    // them is why several builds failed to narrow anything. Count the
+    // callbacks and keep the status code.
+    private var _profileCallbacks = 0;
+    private var _lastStatus = -1;
+    private var _timeouts = 0;
+
     // ---- handshake instrumentation --------------------------------------
     // Read by DiagnosticsView. Without these a stalled handshake is opaque:
     // "no telemetry" looks identical whether the challenge never arrived, or
@@ -147,7 +159,12 @@ class BoardLink extends Ble.BleDelegate {
         var shortForms = BoardUuids.tier(index);
         if (shortForms == null) {
             // Even the minimum was refused. Nothing further to try.
-            if (_lastError.equals("")) { _lastError = "timeout"; }
+            // Say which way it actually failed rather than assuming.
+            if (_lastError.equals("")) {
+                _lastError = (_profileCallbacks > 0)
+                    ? ("status " + _lastStatus.format("%d"))
+                    : "no callback";
+            }
             _state = STATE_PROFILE_FAILED;
             return;
         }
@@ -199,6 +216,7 @@ class BoardLink extends Ble.BleDelegate {
         if (System.getTimer() - _registerPendingSince < REGISTER_TIMEOUT_MS) {
             return;
         }
+        _timeouts++;
         tryRegisterTier(_tierIndex + 1);
     }
 
@@ -211,6 +229,9 @@ class BoardLink extends Ble.BleDelegate {
     function isProfileReady() as Lang.Boolean { return _profileReady; }
     function getLastError() as Lang.String { return _lastError; }
     function usesDescriptors() as Lang.Boolean { return _useDescriptors; }
+    function getProfileCallbacks() as Lang.Number { return _profileCallbacks; }
+    function getLastStatus() as Lang.Number { return _lastStatus; }
+    function getTimeouts() as Lang.Number { return _timeouts; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
@@ -451,6 +472,9 @@ class BoardLink extends Ble.BleDelegate {
     //! falls back rather than giving up. tryRegisterTier gives up on its own
     //! once the tiers are exhausted.
     function onProfileRegister(uuid, status) {
+        _profileCallbacks++;
+        _lastStatus = (status == null) ? -2 : status;
+
         if (status == Ble.STATUS_SUCCESS) {
             _profileReady = true;
             startScan();
