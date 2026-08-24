@@ -58,10 +58,15 @@ Not yet on the Connect IQ Store. To side-load:
 1. Install the [Connect IQ SDK](https://developer.garmin.com/connect-iq/sdk/)
    and download your device in the SDK Manager.
 2. Build for your watch (see [Building](#building) for the toolchain setup).
-3. Copy the `.prg` built for **your exact device** to `GARMIN/Apps/` over USB
-   (check `GarminDevice.xml` on the watch - a wrong-target build installs and
-   runs but its BLE silently does nothing),
-   and eject.
+3. Copy the `.prg` built for **your exact device** to `GARMIN/Apps/` over USB,
+   then eject.
+
+**Check the target before you build.** Read `GarminDevice.xml` from the root of
+the mounted watch and match its `PartNumber` against the SDK device definitions
+in `%APPDATA%/Garmin/ConnectIQ/Devices/*/`. A `.prg` built for a sibling device
+installs and runs, and the UI looks right — but BLE silently does nothing, with
+no error of any kind. A fēnix 6 Sapphire is `fenix6pro`; a 6X Sapphire is
+`fenix6xpro`.
 
 Settings live in Garmin Connect → your device → Connect IQ Apps → carve, or in
 Garmin Express.
@@ -124,8 +129,8 @@ connectiq && monkeydo bin/carve-fenix6pro.prg fenix6pro
 
 `monkeydo` stays attached while the app runs; that is normal, not a hang.
 
-The app uses about **32 KB** of the 1275 KB available to a watch app on a
-fēnix 6X, so there is ample headroom for more fields.
+The app uses about **37 KB** of the ~1275 KB available to a watch app on a
+fēnix 6, so there is ample headroom for more fields.
 
 Note that the simulator has no BLE without a supported USB dongle, so the app
 sits at `OFFLINE` there — profile registration never calls back. That is
@@ -148,10 +153,11 @@ before the first completes. Every operation goes through the queue in
 direct `requestRead()` anywhere else will appear to work and then intermittently
 lose data.
 
-**Registration budget is finite.** Connect IQ caps registered profiles at three,
-and every characteristic and descriptor costs memory whether subscribed or not.
-`BoardUuids.registeredCharacteristics()` is the deliberate minimum. Adding a
-field means adding its characteristic there too, then re-testing on hardware.
+**Registration budget is finite.** Connect IQ caps registered profiles at three
+per app lifetime, and every attempt spends one whether it succeeds or not — so a
+long fallback ladder defeats itself. `BoardUuids.tier()` is deliberately two
+rungs, `essential()` then `minimal()`. Adding a field means adding its
+characteristic to `essential()` too, then re-testing on hardware.
 
 ## Read-only, on purpose
 
