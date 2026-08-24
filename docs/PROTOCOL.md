@@ -31,6 +31,35 @@ All characteristics share the `e659fXXX-ea98-11e3-ac10-0800200c9a66` pattern;
 only the third group varies, so the code stores the 16-bit short form and
 expands it.
 
+## Advertising
+
+Verified from a scanner capture of an XR, 2026-08-23:
+
+```
+Complete Local Name:   ow111222          (lowercase on the wire)
+128-bit Service UUIDs: e659f300-ea98-11e3-ac10-0800200c9a66
+Device type:           LE only
+Advertising type:      Legacy
+Flags:                 LE General Discoverable, BR/EDR Not Supported
+Manufacturer data:     Company 0x0301 (Giatec Scientific Inc.)
+Advertising interval:  ~106 ms
+```
+
+Two things follow.
+
+**The service UUID is in the advertisement**, not merely in the GATT table, so
+matching on `ScanResult.getServiceUuids()` works. That is the primary match.
+
+**The advertised name is lowercase.** The name appears capitalised in some
+UIs, so any name-based matching must be case-insensitive. `BoardLink` matches
+the first two characters lowercased, and falls back to this only when the
+service UUID is absent from the advert.
+
+The manufacturer company ID belongs to an unrelated instrumentation vendor and
+is almost certainly an unmodified default from an off-the-shelf BLE module.
+Do not filter on it - it is exactly the sort of value that changes silently
+with a hardware revision.
+
 ## Characteristics
 
 | Short | Name | Type | Conf |
