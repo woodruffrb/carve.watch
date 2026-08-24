@@ -560,10 +560,18 @@ class BoardLink extends Ble.BleDelegate {
         var frame = _rxBuffer.slice(0, Unlock.FRAME_LEN);
         _rxBuffer = []b;
 
-        // Record the frame before judging it, so a rejected one is inspectable.
-        _lastFrame = frame;
-        _lastCalcSum = Unlock.xorChecksum(frame.slice(0, Unlock.FRAME_LEN - 1));
-        _lastRecvSum = frame[Unlock.FRAME_LEN - 1];
+        // Record the FIRST frame and hold it.
+        //
+        // During the search a fresh challenge arrives every 2.5 s, so a
+        // rolling capture means the frame page and the response page describe
+        // different exchanges by the time both have been read - which made the
+        // two screenshots impossible to compare. Freezing the first pair keeps
+        // them consistent for as long as it takes to page across.
+        if (_lastFrame.size() == 0) {
+            _lastFrame = frame;
+            _lastCalcSum = Unlock.xorChecksum(frame.slice(0, Unlock.FRAME_LEN - 1));
+            _lastRecvSum = frame[Unlock.FRAME_LEN - 1];
+        }
 
         if (!Unlock.frameIsIntact(frame)) {
             // Reassembly went wrong, or this was not a challenge. Let the
@@ -588,7 +596,11 @@ class BoardLink extends Ble.BleDelegate {
 
         var response = Unlock.buildResponse(frame, _spanVariant);
         if (response == null) { return; }
-        _lastResponse = response;
+
+        // Frozen alongside the frame it answers, for the same reason.
+        if (_lastResponse.size() == 0) {
+            _lastResponse = response;
+        }
 
         _unlockAttempts++;
         _responsesSent++;
@@ -685,6 +697,8 @@ class BoardLink extends Ble.BleDelegate {
             _handshakeSkipped = false;
             _unlockUnverified = false;
             _spanAttempt = 0;
+            _lastFrame = []b;
+            _lastResponse = []b;
             _queue = [];
             _busy = false;
 
