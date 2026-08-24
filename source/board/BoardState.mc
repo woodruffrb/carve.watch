@@ -88,8 +88,11 @@ class BoardState {
     //! `connected`: the GATT link can be up while the unlock has lapsed,
     //! which leaves the characteristics readable but frozen at their last
     //! values. That state must not look healthy.
+    //! Live means telemetry is actually arriving. `unlocked` is deliberately
+    //! not required: older firmware has no handshake to complete, and gating
+    //! on it would report a perfectly healthy board as dead.
     function isLive() {
-        return connected && unlocked && isFresh(RPM);
+        return connected && isFresh(RPM);
     }
 
     function clearTelemetry() {

@@ -33,6 +33,21 @@ class BoardLink extends Ble.BleDelegate {
     //! rather than unlucky - see Unlock.MD5_SPAN.
     static const UNLOCK_MAX_ATTEMPTS = 3;
 
+    //! How long to wait for a first challenge before concluding the board
+    //! does not use the handshake at all.
+    //!
+    //! The challenge-response was introduced in later firmware. Older boards -
+    //! the reference board reads firmware 0x1045, i.e. 4165 - never send a
+    //! challenge, so an app that treats the unlock as mandatory waits forever
+    //! for a frame that is not coming, while the telemetry characteristics sit
+    //! there perfectly readable. Treat the handshake as conditional: if no
+    //! challenge arrives in this window, go live and poll.
+    //!
+    //! The keepalive keeps running regardless, so a board that does want the
+    //! handshake still gets one; this only stops the absence of a challenge
+    //! from being fatal.
+    static const UNLOCK_GRACE_MS = 10000;
+
     static const MAX_QUEUE_DEPTH = 8;
 
     //! Reads issued per tick. Enough to cycle the full 32-characteristic
@@ -103,6 +118,17 @@ class BoardLink extends Ble.BleDelegate {
     private var _lastScanStatus = -1;
     private var _lastScanState = -1;
     private var _scanResultCount = 0;
+    private var _connectedAtMs = 0;
+    private var _handshakeSkipped = false;
+
+    //! The most recent 20-byte frame and the checksum comparison for it.
+    //!
+    //! Ten frames arrived and all ten were rejected, which is either a wrong
+    //! signature or a wrong checksum rule - indistinguishable without the
+    //! bytes. Guessing between them has already cost enough; keep the frame.
+    private var _lastFrame as Lang.ByteArray = []b;
+    private var _lastCalcSum = -1;
+    private var _lastRecvSum = -1;
 
     // Registration outcome instrumentation.
     //
@@ -246,6 +272,10 @@ class BoardLink extends Ble.BleDelegate {
     function getLastScanStatus() as Lang.Number { return _lastScanStatus; }
     function getLastScanState() as Lang.Number { return _lastScanState; }
     function getScanResultCount() as Lang.Number { return _scanResultCount; }
+    function isHandshakeSkipped() as Lang.Boolean { return _handshakeSkipped; }
+    function getLastFrame() as Lang.ByteArray { return _lastFrame; }
+    function getLastCalcSum() as Lang.Number { return _lastCalcSum; }
+    function getLastRecvSum() as Lang.Number { return _lastRecvSum; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
@@ -309,11 +339,23 @@ class BoardLink extends Ble.BleDelegate {
         }
 
         var now = System.getTimer();
+
+        // Only skip when *nothing at all* has arrived on the UART. Frames
+        // arriving but failing to parse is a decoding bug, not an absent
+        // handshake, and skipping in that case would paper over it.
+        if (_state == STATE_UNLOCKING
+            && _rxTotal == 0
+            && (now - _connectedAtMs) >= UNLOCK_GRACE_MS) {
+            _state = STATE_LIVE;
+            _boardState.unlocked = true;
+            _handshakeSkipped = true;
+        }
+
         if (now - _lastUnlockMs >= KEEPALIVE_MS) {
             if (_state == STATE_UNLOCKING
                 && _unlockAttempts >= UNLOCK_MAX_ATTEMPTS) {
-                // Three challenges answered with no telemetry back. The
-                // response is being rejected, not lost.
+                // Challenges answered with no telemetry back. The response is
+                // being rejected, not lost.
                 _state = STATE_UNLOCK_REJECTED;
                 return;
             }
@@ -466,6 +508,11 @@ class BoardLink extends Ble.BleDelegate {
         var frame = _rxBuffer.slice(0, Unlock.FRAME_LEN);
         _rxBuffer = []b;
 
+        // Record the frame before judging it, so a rejected one is inspectable.
+        _lastFrame = frame;
+        _lastCalcSum = Unlock.xorChecksum(frame.slice(0, Unlock.FRAME_LEN - 1));
+        _lastRecvSum = frame[Unlock.FRAME_LEN - 1];
+
         if (!Unlock.frameIsIntact(frame)) {
             // Reassembly went wrong, or this was not a challenge. Let the
             // keepalive timer retry rather than hammering the board.
@@ -568,6 +615,8 @@ class BoardLink extends Ble.BleDelegate {
             _state = STATE_UNLOCKING;
             _unlockAttempts = 0;
             _lastUnlockMs = System.getTimer();
+            _connectedAtMs = System.getTimer();
+            _handshakeSkipped = false;
             _queue = [];
             _busy = false;
 

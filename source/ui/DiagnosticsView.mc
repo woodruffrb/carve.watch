@@ -32,7 +32,7 @@ class DiagnosticsView extends WatchUi.View {
     //! Split three ways because fifteen rows on one 260 px screen overlap
     //! into illegibility - diagnostics that cannot be read are not
     //! diagnostics.
-    static const STATUS_PAGES = 3;
+    static const STATUS_PAGES = 4;
 
     function initialize(link) {
         View.initialize();
@@ -99,7 +99,8 @@ class DiagnosticsView extends WatchUi.View {
                 [ "challenge", _link.getChallengesSeen().format("%d") ],
                 [ "bad frame", _link.getBadFrames().format("%d") ],
                 [ "sent",      _link.getResponsesSent().format("%d") ],
-                [ "attempts",  _link.getUnlockAttempts().format("%d") ]
+                [ "attempts",  _link.getUnlockAttempts().format("%d") ],
+                [ "skipped",   _link.isHandshakeSkipped() ? "yes" : "no" ]
             ];
         } else if (page == 1) {
             title = "register";
@@ -112,6 +113,17 @@ class DiagnosticsView extends WatchUi.View {
                 [ "reg try", _link.getRegisterAttempts().format("%d") ],
                 [ "status",  _link.getLastStatus().format("%d") ],
                 [ "reg err", trunc(_link.getLastError(), 12) ]
+            ];
+        } else if (page == 3) {
+            title = "frame";
+            var f = _link.getLastFrame();
+            rows = [
+                [ "b0-4",   hexRange(f, 0, 5) ],
+                [ "b5-9",   hexRange(f, 5, 10) ],
+                [ "b10-14", hexRange(f, 10, 15) ],
+                [ "b15-19", hexRange(f, 15, 20) ],
+                [ "sum",    _link.getLastCalcSum().format("%02X")
+                            + " vs " + _link.getLastRecvSum().format("%02X") ]
             ];
         } else {
             title = "system";
@@ -191,6 +203,16 @@ class DiagnosticsView extends WatchUi.View {
 
     //! Bytes as uppercase hex, no separators. Truncated past four bytes -
     //! anything longer will not fit a column and is not a telemetry scalar.
+    //! A slice of a frame as hex, for the raw frame page.
+    private function hexRange(b as Lang.ByteArray, from as Lang.Number, to as Lang.Number) as Lang.String {
+        if (b == null || b.size() < to) { return "--"; }
+        var s = "";
+        for (var i = from; i < to; i++) {
+            s += b[i].format("%02X");
+        }
+        return s;
+    }
+
     private function hex(bytes as Lang.ByteArray?) as Lang.String {
         if (bytes == null) { return "--"; }
         var s = "";
