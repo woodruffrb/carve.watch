@@ -100,7 +100,10 @@ class DiagnosticsView extends WatchUi.View {
                 [ "bad frame", _link.getBadFrames().format("%d") ],
                 [ "sent",      _link.getResponsesSent().format("%d") ],
                 [ "attempts",  _link.getUnlockAttempts().format("%d") ],
-                [ "skipped",   _link.isHandshakeSkipped() ? "yes" : "no" ]
+                [ "span",      _link.getSpanVariant().format("%d")
+                               + (_link.getSpanSolved() >= 0
+                                  ? (" OK" + _link.getSpanSolved().format("%d"))
+                                  : " try") ]
             ];
         } else if (page == 1) {
             title = "register";

@@ -130,6 +130,10 @@ class BoardLink extends Ble.BleDelegate {
     private var _lastCalcSum = -1;
     private var _lastRecvSum = -1;
 
+    private var _spanAttempt = 0;
+    private var _spanVariant = 0;
+    private var _spanSolved = -1;
+
     // Registration outcome instrumentation.
     //
     // The earlier "timeout" label was set in the tiers-exhausted branch, not
@@ -276,6 +280,8 @@ class BoardLink extends Ble.BleDelegate {
     function getLastFrame() as Lang.ByteArray { return _lastFrame; }
     function getLastCalcSum() as Lang.Number { return _lastCalcSum; }
     function getLastRecvSum() as Lang.Number { return _lastRecvSum; }
+    function getSpanVariant() as Lang.Number { return _spanVariant; }
+    function getSpanSolved() as Lang.Number { return _spanSolved; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
@@ -521,7 +527,20 @@ class BoardLink extends Ble.BleDelegate {
         }
         _challengesSeen++;
 
-        var response = Unlock.buildResponse(frame);
+        // Cycle the MD5 span on each challenge. Which bytes feed the hash is
+        // the one genuinely unknown part of the handshake, and challenges
+        // arrive repeatedly - so try a different candidate each time rather
+        // than spending a rebuild-and-reflash cycle per guess. Whichever
+        // variant is in flight when telemetry starts is the correct one, and
+        // it is latched in onCharacteristicChanged.
+        if (_spanSolved >= 0) {
+            _spanVariant = _spanSolved;
+        } else {
+            _spanVariant = _spanAttempt % Unlock.SPAN_COUNT;
+            _spanAttempt++;
+        }
+
+        var response = Unlock.buildResponse(frame, _spanVariant);
         if (response == null) { return; }
 
         _unlockAttempts++;
@@ -692,6 +711,11 @@ class BoardLink extends Ble.BleDelegate {
             _boardState.unlocked = true;
             _state = STATE_LIVE;
             _unlockAttempts = 0;
+
+            // Telemetry arriving is the proof. Latch the span that was in
+            // flight so it is used for every subsequent keepalive, and so
+            // Diagnostics can report which candidate was correct.
+            _spanSolved = _spanVariant;
         }
     }
 

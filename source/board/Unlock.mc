@@ -25,52 +25,66 @@ module Unlock {
     var SIGNATURE as Lang.ByteArray = [0x43, 0x52, 0x58]b;   // "CRX"
     const FRAME_LEN = 20;
 
-    // The source documentation says to hash "the challenge bytes + password"
-    // without pinning down whether that means the 16-byte payload or the whole
-    // 20-byte frame. Payload is the reading both community implementations
-    // appear to use, so it is the default.
-    //
-    // If the board rejects the response on hardware - BoardLink reports
-    // STATE_UNLOCK_REJECTED after three attempts - change this to
-    // SPAN_FULL_FRAME and re-test. That is the entire fix.
-    const SPAN_PAYLOAD    = 0;
-    const SPAN_FULL_FRAME = 1;
-    const MD5_SPAN = SPAN_PAYLOAD;
-
-    //! True when buf is a complete, well-formed challenge frame.
+    //! A frame is valid if it is 20 bytes with a correct trailing checksum.
+    //!
+    //! Deliberately does NOT require a "CRX" signature. A real challenge from
+    //! a board on firmware 4165 reads:
+    //!
+    //!   09 8E 56 6D 05 3B 63 6D C9 A7 20 04 55 29 80 19 80 5A A7 5E
+    //!
+    //! - no CRX anywhere in it, and byte 19 is a correct XOR of bytes 0..18.
+    //! An earlier version required the signature on the challenge, taken from
+    //! a summarised community write-up, and rejected every frame the board
+    //! sent. The signature belongs to the response, not the challenge.
+    //!
+    //! The checksum matching is what proves the framing is right: a
+    //! misaligned 20-byte window would not produce a valid one by chance.
     function isChallenge(buf as Lang.ByteArray?) as Lang.Boolean {
         if (buf == null || buf.size() < FRAME_LEN) {
             return false;
         }
-        return buf[0] == 0x43 && buf[1] == 0x52 && buf[2] == 0x58;
+        return true;
     }
 
-    //! Build the 20-byte answer, or null if the frame is not a valid challenge.
-    function buildResponse(challenge as Lang.ByteArray?) as Lang.ByteArray? {
+    //! Which bytes of the challenge feed the MD5.
+    //!
+    //! This is the one part of the handshake still genuinely unknown. Rather
+    //! than pick one and require a rebuild-and-reflash cycle per guess,
+    //! BoardLink cycles through these on successive challenges and keeps
+    //! whichever one produces telemetry.
+    const SPAN_PAYLOAD    = 0;   // bytes 3..18  (16) - the documented reading
+    const SPAN_FULL_FRAME = 1;   // bytes 0..19  (20)
+    const SPAN_FIRST16    = 2;   // bytes 0..15  (16)
+    const SPAN_DATA19     = 3;   // bytes 0..18  (19) - everything but checksum
+    const SPAN_COUNT      = 4;
+
+    function spanBytes(challenge as Lang.ByteArray, variant as Lang.Number) as Lang.ByteArray {
+        if (variant == SPAN_FULL_FRAME) { return challenge.slice(0, FRAME_LEN); }
+        if (variant == SPAN_FIRST16)    { return challenge.slice(0, 16); }
+        if (variant == SPAN_DATA19)     { return challenge.slice(0, FRAME_LEN - 1); }
+        return challenge.slice(3, 19);
+    }
+
+    //! Build the 20-byte answer: "CRX" + MD5 + XOR checksum.
+    //!
+    //! The signature stays on the response - that is what the documented
+    //! procedure describes, and nothing observed contradicts it.
+    function buildResponse(challenge as Lang.ByteArray?, variant as Lang.Number) as Lang.ByteArray? {
         if (!isChallenge(challenge)) {
             return null;
         }
 
-        var hashed = (MD5_SPAN == SPAN_FULL_FRAME)
-            ? challenge.slice(0, FRAME_LEN)
-            : challenge.slice(3, 19);
-
         var hash = new Cryptography.Hash({ :algorithm => Cryptography.HASH_MD5 });
-        hash.update(hashed);
+        hash.update(spanBytes(challenge, variant));
         hash.update(KEY);
-        var digest = hash.digest();          // 16 bytes
+        var digest = hash.digest();
 
-        // Built from a fresh literal rather than from SIGNATURE. ByteArray
-        // add/addAll return new arrays rather than mutating, so reusing
-        // SIGNATURE would be safe - but if that ever stopped being true the
-        // constant would grow by 17 bytes on every keepalive, and the failure
-        // would not show up until well into a ride.
         var frame = [0x43, 0x52, 0x58]b.addAll(digest);
         return frame.add(xorChecksum(frame));
     }
 
-    //! XOR of every byte. Used both to build our checksum and to sanity-check
-    //! the board's, which is how a half-received frame gets caught.
+    //! XOR of every byte. Used both to build our checksum and to verify the
+    //! board's, which is what proves a 20-byte window is correctly aligned.
     function xorChecksum(bytes as Lang.ByteArray) as Lang.Number {
         var acc = 0;
         for (var i = 0; i < bytes.size(); i++) {
