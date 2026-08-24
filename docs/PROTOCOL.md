@@ -215,6 +215,32 @@ Static key (**[V]**):
 d9 25 5f 0f 23 35 4e 19 ba 73 9c cd c4 a9 17 65
 ```
 
+### Verified on hardware, byte for byte
+
+Captured from a fenix 6 Sapphire talking to a board on firmware 4165:
+
+```
+challenge  09 8E 56 6D 05 3B 63 6D C9 A7 20 04 55 29 80 19 80 5A A7 5E
+response   09 8E 56 36 BD BD 95 D7 F1 14 61 F7 C7 4E C3 FC 13 4B CF F7
+```
+
+The response matches the reference algorithm exactly. Note the challenge is
+**constant** across sessions on this board - the same twenty bytes appeared
+in captures minutes apart - so the first three bytes are not a random nonce
+prefix and are best understood as fixed for a given board.
+
+### Detecting success
+
+**A successful response write is the proof, not an incoming notification.**
+
+The board does not necessarily push its telemetry characteristics. Reads
+work and the UART subscription works, but waiting for a telemetry
+notification to confirm the unlock meant a provably correct response was
+read as a failure, and the app re-challenged indefinitely while sending
+byte-perfect answers. Treat `onCharacteristicWrite` on the UART write
+characteristic, with a success status, as the handshake completing - then
+poll.
+
 ### Response format - verified against the reference implementation
 
 The response's first three bytes are **the challenge's own first three bytes,

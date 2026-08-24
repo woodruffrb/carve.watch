@@ -745,7 +745,32 @@ class BoardLink extends Ble.BleDelegate {
         complete();
     }
 
+    //! A successfully written unlock response is the proof the handshake
+    //! completed - not a notification.
+    //!
+    //! Success was previously detected only by a telemetry notification
+    //! arriving. That is the wrong evidence: reads work and the UART
+    //! subscription works, but the board does not necessarily push the
+    //! telemetry characteristics, so a perfectly good unlock produced no
+    //! notification, was read as failure, and the app re-challenged forever
+    //! while sending provably correct responses.
+    //!
+    //! Verified byte-for-byte against the reference implementation:
+    //!   challenge 09 8E 56 6D 05 3B 63 6D C9 A7 20 04 55 29 80 19 80 5A A7 5E
+    //!   response  09 8E 56 36 BD BD 95 D7 F1 14 61 F7 C7 4E C3 FC 13 4B CF F7
+    //!
+    //! So going live here and polling is correct. If the unlock had in fact
+    //! failed, the polled values would be stale and isLive() would say so.
     function onCharacteristicWrite(characteristic, status) {
+        if (_state == STATE_UNLOCKING
+            && status == Ble.STATUS_SUCCESS
+            && characteristic.getUuid().equals(BoardUuids.uuid(BoardUuids.UART_WRITE))) {
+            _state = STATE_LIVE;
+            _boardState.unlocked = true;
+            _spanSolved = _spanVariant;
+            _unlockAttempts = 0;
+            buildPollList();
+        }
         complete();
     }
 
