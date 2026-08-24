@@ -100,7 +100,8 @@ class DiagnosticsView extends WatchUi.View {
                 [ "bad frame", _link.getBadFrames().format("%d") ],
                 [ "sent",      _link.getResponsesSent().format("%d") ],
                 [ "attempts",  _link.getUnlockAttempts().format("%d") ],
-                [ "span",      _link.getSpanVariant().format("%d")
+                [ "variant",   _link.getSpanVariant().format("%d")
+                               + "/" + _link.getSpanAttempt().format("%d")
                                + (_link.getSpanSolved() >= 0
                                   ? (" OK" + _link.getSpanSolved().format("%d"))
                                   : " try") ]

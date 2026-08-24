@@ -52,17 +52,30 @@ module Unlock {
     //! than pick one and require a rebuild-and-reflash cycle per guess,
     //! BoardLink cycles through these on successive challenges and keeps
     //! whichever one produces telemetry.
+    //! A variant encodes both unknowns: which bytes are hashed, and in which
+    //! order they are concatenated with the key. Order matters to MD5 and
+    //! there was never any evidence for one over the other, so both are
+    //! searched rather than assumed.
+    //!
+    //!   variant / 2  -> span    0..3
+    //!   variant % 2  -> order   0 = span then key, 1 = key then span
     const SPAN_PAYLOAD    = 0;   // bytes 3..18  (16) - the documented reading
     const SPAN_FULL_FRAME = 1;   // bytes 0..19  (20)
     const SPAN_FIRST16    = 2;   // bytes 0..15  (16)
     const SPAN_DATA19     = 3;   // bytes 0..18  (19) - everything but checksum
     const SPAN_COUNT      = 4;
+    const VARIANT_COUNT   = 8;
 
     function spanBytes(challenge as Lang.ByteArray, variant as Lang.Number) as Lang.ByteArray {
-        if (variant == SPAN_FULL_FRAME) { return challenge.slice(0, FRAME_LEN); }
-        if (variant == SPAN_FIRST16)    { return challenge.slice(0, 16); }
-        if (variant == SPAN_DATA19)     { return challenge.slice(0, FRAME_LEN - 1); }
+        var span = variant / 2;
+        if (span == SPAN_FULL_FRAME) { return challenge.slice(0, FRAME_LEN); }
+        if (span == SPAN_FIRST16)    { return challenge.slice(0, 16); }
+        if (span == SPAN_DATA19)     { return challenge.slice(0, FRAME_LEN - 1); }
         return challenge.slice(3, 19);
+    }
+
+    function keyFirst(variant as Lang.Number) as Lang.Boolean {
+        return (variant % 2) == 1;
     }
 
     //! Build the 20-byte answer: "CRX" + MD5 + XOR checksum.
@@ -75,8 +88,14 @@ module Unlock {
         }
 
         var hash = new Cryptography.Hash({ :algorithm => Cryptography.HASH_MD5 });
-        hash.update(spanBytes(challenge, variant));
-        hash.update(KEY);
+        var span = spanBytes(challenge, variant);
+        if (keyFirst(variant)) {
+            hash.update(KEY);
+            hash.update(span);
+        } else {
+            hash.update(span);
+            hash.update(KEY);
+        }
         var digest = hash.digest();
 
         var frame = [0x43, 0x52, 0x58]b.addAll(digest);

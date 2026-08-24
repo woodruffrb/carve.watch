@@ -29,9 +29,24 @@ class BoardLink extends Ble.BleDelegate {
     //! queue briefly backed up behind a slow read.
     static const KEEPALIVE_MS = 15000;
 
-    //! After this many unanswered challenges the handshake is presumed wrong
-    //! rather than unlucky - see Unlock.MD5_SPAN.
-    static const UNLOCK_MAX_ATTEMPTS = 3;
+    //! How many full passes through the variant search to make before
+    //! declaring the handshake rejected.
+    //!
+    //! This replaces a flat three-attempt cap that predated the search and
+    //! silently defeated it: the cap tripped on the third response, before
+    //! even the original four variants had been tried, so the run ended in
+    //! UNLOCK FAILED while still reporting "span 2 try". A give-up threshold
+    //! has to outlast the search it is supervising.
+    static const UNLOCK_MIN_ROUNDS = 2;
+
+    //! Challenge interval while the variant search is still running.
+    //!
+    //! The 15 s keepalive exists to stay inside the board's 24 s window during
+    //! a ride; using it to pace a search made sixteen attempts take four
+    //! minutes of standing next to the board. While searching, each challenge
+    //! is just a characteristic write, so ask far more often and let the
+    //! normal keepalive take over once the link is live.
+    static const SEARCH_CHALLENGE_MS = 2500;
 
     //! How long to wait for a first challenge before concluding the board
     //! does not use the handshake at all.
@@ -281,6 +296,7 @@ class BoardLink extends Ble.BleDelegate {
     function getLastCalcSum() as Lang.Number { return _lastCalcSum; }
     function getLastRecvSum() as Lang.Number { return _lastRecvSum; }
     function getSpanVariant() as Lang.Number { return _spanVariant; }
+    function getSpanAttempt() as Lang.Number { return _spanAttempt; }
     function getSpanSolved() as Lang.Number { return _spanSolved; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
@@ -357,11 +373,17 @@ class BoardLink extends Ble.BleDelegate {
             _handshakeSkipped = true;
         }
 
-        if (now - _lastUnlockMs >= KEEPALIVE_MS) {
+        // Search fast, then settle into the ride-time keepalive.
+        var interval = (_state == STATE_UNLOCKING && _spanSolved < 0)
+            ? SEARCH_CHALLENGE_MS
+            : KEEPALIVE_MS;
+
+        if (now - _lastUnlockMs >= interval) {
             if (_state == STATE_UNLOCKING
-                && _unlockAttempts >= UNLOCK_MAX_ATTEMPTS) {
-                // Challenges answered with no telemetry back. The response is
-                // being rejected, not lost.
+                && _spanAttempt >= (Unlock.VARIANT_COUNT * UNLOCK_MIN_ROUNDS)) {
+                // Every variant tried, more than once, with no telemetry
+                // back. The responses are being rejected rather than lost, so
+                // the fault is the key or the response format, not the span.
                 _state = STATE_UNLOCK_REJECTED;
                 return;
             }
@@ -536,7 +558,7 @@ class BoardLink extends Ble.BleDelegate {
         if (_spanSolved >= 0) {
             _spanVariant = _spanSolved;
         } else {
-            _spanVariant = _spanAttempt % Unlock.SPAN_COUNT;
+            _spanVariant = _spanAttempt % Unlock.VARIANT_COUNT;
             _spanAttempt++;
         }
 
