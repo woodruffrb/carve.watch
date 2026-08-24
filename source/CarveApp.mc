@@ -22,7 +22,9 @@ class CarveApp extends Application.AppBase {
     private var _recorder;
     private var _tick;
     private var _view;
-    private var _registered = false;
+    //! Whether Ble.setDelegate() returned without throwing. Surfaced in
+    //! Diagnostics: no delegate means no callbacks, for anything.
+    static var _delegateSet = false;
 
     function initialize() {
         AppBase.initialize();
@@ -36,15 +38,21 @@ class CarveApp extends Application.AppBase {
         _recorder = new RideRecorder();
         _link     = new BoardLink(_state);
 
-        // The delegate must be installed before any GATT work.
+        // Both of these belong in initialisation. The API docs are explicit
+        // that registration must occur during application initialisation to
+        // define the available GATT operations, so deferring it to the first
+        // timer tick - tried in 0.1.7 - was working against the contract.
         //
-        // Registration itself is deferred to the first tick rather than run
-        // here. Calling registerProfile from onStart puts it before the app is
-        // fully resident, and the observed failure - accepted, then no
-        // callback and no exception - is consistent with the request being
-        // issued too early to be serviced. Deferring costs one second and
-        // removes that variable.
-        Ble.setDelegate(_link);
+        // setDelegate is wrapped because a failure here would explain the
+        // observed symptom exactly: registerProfile accepted, and then no
+        // callback ever delivered because nothing is listening.
+        try {
+            Ble.setDelegate(_link);
+            _delegateSet = true;
+        } catch (ex) {
+            _delegateSet = false;
+        }
+        _link.registerProfiles();
 
         Fields.resetSession();
 
@@ -71,11 +79,6 @@ class CarveApp extends Application.AppBase {
     //! Return type is explicit because Timer.start requires a
     //! `Method() as Void` and infers `as Any` without it.
     function onTick() as Void {
-        if (!_registered) {
-            _registered = true;
-            _link.registerProfiles();
-        }
-
         _link.onTick();
 
         if (_state.isLive()) {

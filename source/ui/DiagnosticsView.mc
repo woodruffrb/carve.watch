@@ -106,6 +106,7 @@ class DiagnosticsView extends WatchUi.View {
             [ "reg cb",    _link.getProfileCallbacks().format("%d")
                            + "/" + _link.getTimeouts().format("%d") + "t" ],
             [ "status",    _link.getLastStatus().format("%d") ],
+            [ "delegate",  CarveApp._delegateSet ? "set" : "FAILED" ],
             // getAvailableConnectionCount is a direct probe of whether the
             // BLE subsystem is alive at all, unlike phoneConnected which only
             // reports phone pairing and is false whenever the phone's radio

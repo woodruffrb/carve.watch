@@ -9,7 +9,7 @@
 <iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
     <iq:application
         entry="CarveApp"
-        id="7b3c1d0e4f2a4c5b8e9d0a1b2c3d4e5f"
+        id="f59c9f3ceb744e9d8c186dbb300494cf"
         launcherIcon="@Drawables.LauncherIcon"
         minApiLevel="3.1.0"
         name="@Strings.AppName"
