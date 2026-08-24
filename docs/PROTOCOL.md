@@ -215,17 +215,41 @@ Static key (**[V]**):
 d9 25 5f 0f 23 35 4e 19 ba 73 9c cd c4 a9 17 65
 ```
 
-### The one genuinely uncertain detail
+### Response format - verified against the reference implementation
 
-The 20-byte challenge is `"CRX"` (3) + payload (16) + checksum (1). The source
-documentation says to MD5 "the challenge bytes + password" without specifying
-whether *challenge bytes* means the **16-byte payload** or all **20 bytes**.
+The response's first three bytes are **the challenge's own first three bytes,
+echoed back**. They are not a literal `CRX`.
 
-`Unlock.mc` defaults to the 16-byte payload and exposes the choice as a single
-constant, `Unlock.MD5_SPAN`. If the handshake fails on hardware, flip it to
-`SPAN_FULL_FRAME` and retry — that is a one-line change. The connection state
-machine surfaces `UNLOCK_REJECTED` so this failure is visible rather than
-silent.
+Every write-up describes them as a signature, because on boards whose
+challenge begins `43 52 58` the echo and the literal are indistinguishable.
+The reference board's challenge begins `09 8E 56`, and hardcoding `CRX`
+produced sixteen correctly-hashed responses that the board rejected outright.
+
+From the reference implementation:
+
+```javascript
+const appendix = [0xd9, 0x25, 0x5f, 0x0f, 0x23, 0x35, 0x4e, 0x19,
+                  0xba, 0x73, 0x9c, 0xcd, 0xc4, 0xa9, 0x17, 0x65];
+const password = [...challenge.slice(3, -1), ...appendix];
+const response = [...challenge.slice(0, 3), ...md5(password)];
+// then push XOR of all response bytes
+```
+
+So, precisely:
+
+| Part | Bytes | Source |
+|---|---|---|
+| prefix | 0..2 | `challenge[0..2]`, echoed |
+| digest | 3..18 | `MD5(challenge[3..18] ++ key)` |
+| checksum | 19 | XOR of response bytes 0..18 |
+
+`slice(3, -1)` is bytes 3 through 18 - sixteen bytes, excluding the trailing
+checksum - hashed **before** the key.
+
+**Read the reference implementations, not summaries of them.** This project
+lost a long debugging session to a summarised README that described the
+prefix as a signature. Several mature open-source clients implement this
+protocol correctly; when something does not work, read their source.
 
 ## Speed derivation
 

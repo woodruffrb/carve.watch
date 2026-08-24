@@ -37,7 +37,7 @@ class BoardLink extends Ble.BleDelegate {
     //! even the original four variants had been tried, so the run ended in
     //! UNLOCK FAILED while still reporting "span 2 try". A give-up threshold
     //! has to outlast the search it is supervising.
-    static const UNLOCK_MIN_ROUNDS = 2;
+    static const UNLOCK_MIN_ROUNDS = 3;
 
     //! Challenge interval while the variant search is still running.
     //!
@@ -148,6 +148,10 @@ class BoardLink extends Ble.BleDelegate {
     private var _spanAttempt = 0;
     private var _spanVariant = 0;
     private var _spanSolved = -1;
+
+    //! True when the link went live without a verified handshake. The data on
+    //! screen may be stale, so this is surfaced rather than hidden.
+    private var _unlockUnverified = false;
 
     // Registration outcome instrumentation.
     //
@@ -297,6 +301,7 @@ class BoardLink extends Ble.BleDelegate {
     function getLastRecvSum() as Lang.Number { return _lastRecvSum; }
     function getSpanVariant() as Lang.Number { return _spanVariant; }
     function getSpanAttempt() as Lang.Number { return _spanAttempt; }
+    function isUnlockUnverified() as Lang.Boolean { return _unlockUnverified; }
     function getSpanSolved() as Lang.Number { return _spanSolved; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
@@ -381,11 +386,21 @@ class BoardLink extends Ble.BleDelegate {
         if (now - _lastUnlockMs >= interval) {
             if (_state == STATE_UNLOCKING
                 && _spanAttempt >= (Unlock.VARIANT_COUNT * UNLOCK_MIN_ROUNDS)) {
-                // Every variant tried, more than once, with no telemetry
-                // back. The responses are being rejected rather than lost, so
-                // the fault is the key or the response format, not the span.
-                _state = STATE_UNLOCK_REJECTED;
-                return;
+                // Every span and hash order tried twice, all rejected. Rather
+                // than stop here, go live and poll anyway.
+                //
+                // The premise that an unlock is required has never actually
+                // been tested on this board. The challenge frames carry no CRX
+                // signature, so they may not be challenges at all - and if
+                // this firmware does not gate reads behind a handshake, the
+                // characteristics are readable right now and the whole search
+                // was solving a problem that does not exist.
+                //
+                // Polling settles it in seconds: real-looking values mean no
+                // unlock is needed; zeros or stale values mean it is.
+                _state = STATE_LIVE;
+                _unlockUnverified = true;
+                buildPollList();
             }
             requestChallenge();
         }
@@ -658,6 +673,8 @@ class BoardLink extends Ble.BleDelegate {
             _lastUnlockMs = System.getTimer();
             _connectedAtMs = System.getTimer();
             _handshakeSkipped = false;
+            _unlockUnverified = false;
+            _spanAttempt = 0;
             _queue = [];
             _busy = false;
 

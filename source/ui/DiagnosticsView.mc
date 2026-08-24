@@ -102,6 +102,7 @@ class DiagnosticsView extends WatchUi.View {
                 [ "attempts",  _link.getUnlockAttempts().format("%d") ],
                 [ "variant",   _link.getSpanVariant().format("%d")
                                + "/" + _link.getSpanAttempt().format("%d")
+                               + (_link.isUnlockUnverified() ? " raw" : "")
                                + (_link.getSpanSolved() >= 0
                                   ? (" OK" + _link.getSpanSolved().format("%d"))
                                   : " try") ]

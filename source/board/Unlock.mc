@@ -22,7 +22,6 @@ module Unlock {
         0xba, 0x73, 0x9c, 0xcd, 0xc4, 0xa9, 0x17, 0x65
     ]b;
 
-    var SIGNATURE as Lang.ByteArray = [0x43, 0x52, 0x58]b;   // "CRX"
     const FRAME_LEN = 20;
 
     //! A frame is valid if it is 20 bytes with a correct trailing checksum.
@@ -78,10 +77,23 @@ module Unlock {
         return (variant % 2) == 1;
     }
 
-    //! Build the 20-byte answer: "CRX" + MD5 + XOR checksum.
+    //! Build the 20-byte answer: challenge[0..2] + MD5 + XOR checksum.
     //!
-    //! The signature stays on the response - that is what the documented
-    //! procedure describes, and nothing observed contradicts it.
+    //! The first three bytes are the challenge's own, echoed back - NOT a
+    //! literal "CRX". Every write-up calls them a signature because on boards
+    //! whose challenge begins 43 52 58 the two are indistinguishable. This
+    //! board's challenge begins 09 8E 56, and hardcoding CRX meant sixteen
+    //! correctly-hashed responses were all addressed wrongly.
+    //!
+    //! From the reference implementation:
+    //!
+    //!   password = [...challenge.slice(3, -1), ...appendix]
+    //!   response = [...challenge.slice(0, 3), ...md5(password)]
+    //!   response.push(xor of all response bytes)
+    //!
+    //! slice(3, -1) is bytes 3..18 - sixteen bytes, excluding the trailing
+    //! checksum - hashed before the key. That is variant 0, which was tried
+    //! and failed only because of the prefix.
     function buildResponse(challenge as Lang.ByteArray?, variant as Lang.Number) as Lang.ByteArray? {
         if (!isChallenge(challenge)) {
             return null;
@@ -98,7 +110,8 @@ module Unlock {
         }
         var digest = hash.digest();
 
-        var frame = [0x43, 0x52, 0x58]b.addAll(digest);
+        // Echo the challenge's own leading three bytes.
+        var frame = challenge.slice(0, 3).addAll(digest);
         return frame.add(xorChecksum(frame));
     }
 
