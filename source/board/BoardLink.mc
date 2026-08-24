@@ -60,6 +60,18 @@ class BoardLink extends Ble.BleDelegate {
     //! cap and start at a width that is expected to succeed.
     static const MAX_REGISTER_ATTEMPTS = 3;
 
+    //! The rung at which descriptors are dropped from the registration.
+    //!
+    //! Both descriptor-carrying attempts were accepted and then silently
+    //! ignored - no throw, no callback - which is not a width failure and not
+    //! a budget failure. A malformed or unwanted descriptor list is the
+    //! remaining thing in the profile that could sink it wholesale, so the
+    //! last rung registers the same characteristics with no CCCDs at all.
+    //!
+    //! If this rung is the one that registers, descriptors are the fault.
+    //! The cost is that nothing can be subscribed, so everything is polled.
+    static const TIER_WITHOUT_DESCRIPTORS = 2;
+
     private var _state = STATE_IDLE;
     private var _device = null;
     private var _profileReady = false;
@@ -80,6 +92,7 @@ class BoardLink extends Ble.BleDelegate {
     private var _registerPendingSince = 0;
     private var _registerAttempts = 0;
     private var _lastError as Lang.String = "";
+    private var _useDescriptors = true;
 
     // ---- handshake instrumentation --------------------------------------
     // Read by DiagnosticsView. Without these a stalled handshake is opaque:
@@ -141,6 +154,7 @@ class BoardLink extends Ble.BleDelegate {
 
         _tierIndex = index;
         _registered = shortForms;
+        _useDescriptors = (index < TIER_WITHOUT_DESCRIPTORS);
         _registerAttempts++;
         _registerPendingSince = System.getTimer();
 
@@ -151,10 +165,9 @@ class BoardLink extends Ble.BleDelegate {
             var short = shortForms[i] as Lang.String;
             var entry = { :uuid => BoardUuids.uuid(short) };
 
-            // Only characteristics we subscribe to get a CCCD. Descriptors are
-            // not free, and on the wide tiers they are what would push the
-            // registration over the limit.
-            if (needsCccd(short, notify)) {
+            // Only characteristics we subscribe to get a CCCD, and only while
+            // descriptors are still in play at all.
+            if (_useDescriptors && needsCccd(short, notify)) {
                 entry[:descriptors] = [ Ble.cccdUuid() ];
             }
             chars.add(entry);
@@ -197,6 +210,7 @@ class BoardLink extends Ble.BleDelegate {
     function getRegisterAttempts() as Lang.Number { return _registerAttempts; }
     function isProfileReady() as Lang.Boolean { return _profileReady; }
     function getLastError() as Lang.String { return _lastError; }
+    function usesDescriptors() as Lang.Boolean { return _useDescriptors; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
@@ -514,9 +528,14 @@ class BoardLink extends Ble.BleDelegate {
             enqueue({ :kind => :read,      :char => BoardUuids.FIRMWARE_REV });
             enqueue({ :kind => :subscribe, :char => BoardUuids.UART_READ });
 
-            var notify = BoardUuids.notifyCharacteristics();
-            for (var i = 0; i < notify.size(); i++) {
-                enqueue({ :kind => :subscribe, :char => notify[i] });
+            // No descriptors registered means no CCCD to write, so there is
+            // nothing to subscribe to and every value has to be polled. The
+            // poll list already covers them.
+            if (_useDescriptors) {
+                var notify = BoardUuids.notifyCharacteristics();
+                for (var i = 0; i < notify.size(); i++) {
+                    enqueue({ :kind => :subscribe, :char => notify[i] });
+                }
             }
         } else {
             _boardState.connected = false;

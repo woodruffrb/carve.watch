@@ -52,6 +52,7 @@ module BoardUuids {
     function tier(index as Lang.Number) as Lang.Array? {
         if (index == 0) { return essential(); }   // 10 - app functional
         if (index == 1) { return minimal(); }     //  6 - handshake + core
+        if (index == 2) { return minimal(); }     //  6 - and no descriptors
         return null;
     }
 

@@ -100,7 +100,9 @@ class DiagnosticsView extends WatchUi.View {
             [ "reg try",   _link.getRegisterAttempts().format("%d") ],
             [ "fw",        fmt(state.peek(BoardState.FIRMWARE)) ],
             [ "build",     Version.BUILD ],
-            [ "reg err",   trunc(_link.getLastError(), 14) ]
+            [ "reg err",   trunc(_link.getLastError(), 14) ],
+            [ "cccd",      _link.usesDescriptors() ? "yes" : "no" ],
+            [ "phone",     System.getDeviceSettings().phoneConnected ? "conn" : "no" ]
         ];
 
         var top = h * 0.26;
