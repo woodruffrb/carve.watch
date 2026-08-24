@@ -259,6 +259,42 @@ not be gating telemetry the way they do on Gemini and later.
 Do not assume the handshake is the reason telemetry is missing until the
 sequence above has been run correctly, including step 6.
 
+### Telemetry is published, not polled
+
+**This is the single most important fact about the protocol, and getting it
+wrong makes a working board look dead.**
+
+Characteristics fall into two groups:
+
+| Group | Characteristics | How to access |
+|---|---|---|
+| read-once | serial `f301`, firmware `f311`, hardware `f318` | read on connect |
+| notify | battery, RPM, odometer, status, temps, voltage, headroom, amps | **subscribe** |
+
+Reading a notify characteristic returns **zero**. It is not an error and
+there is no indication anything is wrong - the read succeeds and yields
+`0000`.
+
+Polling them is actively harmful: the zero overwrites the real value a
+notification just delivered. A full sweep on a timer therefore produces
+uniform zeros across every telemetry characteristic while serial, firmware
+and hardware read perfectly - which is exactly the symptom that was
+misdiagnosed here as a locked board.
+
+### Corrections to the community map
+
+Two entries that were wrong here, from reading a working client:
+
+| Characteristic | Was assumed | Actually |
+|---|---|---|
+| `e659f316` | - | **pack voltage**, uint16 big-endian / 10 |
+| `e659f313` | pack voltage | trip amp-hours |
+| `e659f315` | - | battery temperature |
+| `e659f30a` | tenths of a mile | **tire revolutions** |
+
+Trip distance therefore depends on tire circumference, exactly as speed
+does.
+
 ### A locked board reads zero
 
 Confirmed on hardware. With the handshake incomplete, every telemetry

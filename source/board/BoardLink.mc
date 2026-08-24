@@ -121,6 +121,7 @@ class BoardLink extends Ble.BleDelegate {
     private var _boardState;
     private var _pollCursor = 0;
     private var _pollList as Lang.Array = [];
+    private var _readOnceRemaining = 0;
 
     private var _tierIndex = 0;
     private var _registered as Lang.Array = [];
@@ -469,27 +470,28 @@ class BoardLink extends Ble.BleDelegate {
     //! one-per-second cursor takes half a minute to get round the range,
     //! which is far too slow to watch a value react to spinning the wheel.
     //! The queue bound is what actually limits the rate.
+    //! Read the identity characteristics once, then stop. There is nothing
+    //! else worth reading, and repeating them just occupies the queue.
     private function pollNext() {
-        if (_pollList.size() == 0) { return; }
+        if (_pollList.size() == 0 || _readOnceRemaining <= 0) { return; }
 
-        for (var n = 0; n < POLLS_PER_TICK; n++) {
-            var short = _pollList[_pollCursor % _pollList.size()] as Lang.String;
-            _pollCursor++;
-            enqueue({ :kind => :read, :char => short });
-        }
+        var short = _pollList[_pollCursor % _pollList.size()] as Lang.String;
+        _pollCursor++;
+        _readOnceRemaining--;
+        enqueue({ :kind => :read, :char => short });
     }
 
-    //! Everything registered except the UART pair, which is not polled -
-    //! the read side is notify-only and the write side is write-only.
+    //! Only the read-once identity characteristics are ever read.
+    //!
+    //! Telemetry is published by notification, and a read of a notify
+    //! characteristic returns zero - so polling one does not merely waste a
+    //! GATT operation, it overwrites the real value a notification just
+    //! delivered with a zero. Sweeping every registered characteristic on a
+    //! timer is what made a working board look uniformly dead.
     private function buildPollList() as Void {
-        _pollList = [];
-        for (var i = 0; i < _registered.size(); i++) {
-            var short = _registered[i] as Lang.String;
-            if (short.equals(BoardUuids.UART_READ)) { continue; }
-            if (short.equals(BoardUuids.UART_WRITE)) { continue; }
-            _pollList.add(short);
-        }
+        _pollList = BoardUuids.readOnceCharacteristics();
         _pollCursor = 0;
+        _readOnceRemaining = _pollList.size();
     }
 
     // =====================================================================
@@ -795,11 +797,11 @@ class BoardLink extends Ble.BleDelegate {
             // No descriptors registered means no CCCD to write, so there is
             // nothing to subscribe to and every value has to be polled. The
             // poll list already covers them.
-            if (_useDescriptors) {
-                var notify = BoardUuids.notifyCharacteristics();
-                for (var i = 0; i < notify.size(); i++) {
-                    enqueue({ :kind => :subscribe, :char => notify[i] });
-                }
+            // Subscribe to everything that publishes. This is how telemetry
+            // arrives; without it the board appears to report nothing at all.
+            var notify = BoardUuids.notifyCharacteristics();
+            for (var i = 0; i < notify.size(); i++) {
+                enqueue({ :kind => :subscribe, :char => notify[i] });
             }
         } else {
             _boardState.connected = false;
@@ -913,8 +915,9 @@ class BoardLink extends Ble.BleDelegate {
             _boardState.put(BoardState.RPM, u16(value));
 
         } else if (uuid.equals(BoardUuids.uuid(BoardUuids.TRIP_ODOMETER))) {
-            // Reported in tenths of a mile.
-            _boardState.put(BoardState.TRIP_M, u16(value) * 160.9344);
+            // Tire revolutions, not tenths of a mile. Distance therefore
+            // depends on the same circumference setting speed uses.
+            _boardState.put(BoardState.TRIP_REVS, u16(value));
 
         } else if (uuid.equals(BoardUuids.uuid(BoardUuids.TEMPERATURE))) {
             // High byte is the controller, low byte the motor.

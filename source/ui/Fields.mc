@@ -83,7 +83,7 @@ module Fields {
             case F_MAX_SPEED:  return fmtSpeed(maxSpeedMps);
             case F_AVG_SPEED:  return fmtSpeed(avgSpeedMps());
             case F_BATTERY:    return fmtInt(state.get(BoardState.BATTERY_PCT));
-            case F_TRIP:       return fmtDistance(state.get(BoardState.TRIP_M));
+            case F_TRIP:       return fmtDistance(state.tripMeters());
             case F_MOTOR_TEMP: return fmtTemp(state.get(BoardState.MOTOR_TEMP));
             case F_BATTERY_V:  return fmtFloat(state.get(BoardState.BATTERY_V), 1);
             case F_HEADROOM:   return fmtInt(state.get(BoardState.HEADROOM));

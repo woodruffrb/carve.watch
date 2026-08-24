@@ -17,7 +17,7 @@ class BoardState {
     // Metric keys. These are the same symbols Fields.mc binds to.
     static const BATTERY_PCT   = :batteryPct;
     static const RPM           = :rpm;
-    static const TRIP_M        = :tripMeters;
+    static const TRIP_REVS     = :tripRevolutions;
     static const LIFETIME_M    = :lifetimeMeters;
     static const MOTOR_TEMP    = :motorTempC;
     static const BATTERY_V     = :batteryVolts;
@@ -91,6 +91,15 @@ class BoardState {
     //! Live means telemetry is actually arriving. `unlocked` is deliberately
     //! not required: older firmware has no handshake to complete, and gating
     //! on it would report a perfectly healthy board as dead.
+    //! Trip distance in metres, derived from wheel revolutions and the same
+    //! tire circumference that speed uses. The board reports revolutions, not
+    //! distance.
+    function tripMeters() {
+        var revs = get(TRIP_REVS);
+        if (revs == null) { return null; }
+        return revs * _circumferenceIn * 0.0254;
+    }
+
     function isLive() {
         return connected && isFresh(RPM);
     }

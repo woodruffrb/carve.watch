@@ -21,10 +21,17 @@ module BoardUuids {
     const STATUS_ERROR   = "e659f30f";
     const TEMPERATURE    = "e659f310";
     const CURRENT_AMPS   = "e659f312";
-    const BATTERY_VOLTS  = "e659f313";
+    const TRIP_AMP_HOURS = "e659f313";
+    const BATTERY_TEMP   = "e659f315";
+    //! Pack voltage is f316, not f313. f313/f314 are trip amp-hours; reading
+    //! f313 as volts was simply wrong.
+    const BATTERY_VOLTS  = "e659f316";
     const SAFETY_HEADROOM= "e659f317";
     const LIFETIME_ODO   = "e659f319";
     const LAST_ERROR     = "e659f31c";
+
+    const SERIAL_NUMBER  = "e659f301";
+    const HARDWARE_REV   = "e659f318";
 
     // ---- handshake -------------------------------------------------------
     const FIRMWARE_REV   = "e659f311";
@@ -95,14 +102,17 @@ module BoardUuids {
         return [
             UART_READ,
             UART_WRITE,
+            SERIAL_NUMBER,
             FIRMWARE_REV,
+            HARDWARE_REV,
             BATTERY_PCT,
             RPM,
             TRIP_ODOMETER,
             STATUS_ERROR,
             TEMPERATURE,
             BATTERY_VOLTS,
-            SAFETY_HEADROOM
+            SAFETY_HEADROOM,
+            CURRENT_AMPS
         ];
     }
 
@@ -112,15 +122,33 @@ module BoardUuids {
         return uuidShort.substring(6, 8);
     }
 
-    //! Characteristics we subscribe to rather than poll.
+    //! Telemetry arrives by notification. Reading these returns zero.
     //!
-    //! Every telemetry characteristic on the board is NOTIFY+READ+WRITE with a
-    //! CCCD, confirmed by GATT dump - so this split is a resource decision,
-    //! not a capability limit. These three change fastest and are worth the
-    //! subscription; the rest are read on the tick to keep the number of
-    //! CCCD writes at connect time small and bound notification traffic.
+    //! This is the whole model, and getting it wrong produced a board that
+    //! looked dead: every telemetry characteristic read back 0000 while
+    //! serial, firmware and hardware read fine. Those three are the read-once
+    //! set - the only ones that answer a read at all. Everything live is
+    //! published, not polled.
+    //!
+    //! Polling a notify characteristic is worse than useless here: the zero it
+    //! returns overwrites the real value a notification just delivered.
     function notifyCharacteristics() as Lang.Array {
-        return [ BATTERY_PCT, RPM, STATUS_ERROR ];
+        return [
+            BATTERY_PCT,
+            RPM,
+            TRIP_ODOMETER,
+            STATUS_ERROR,
+            TEMPERATURE,
+            BATTERY_VOLTS,
+            SAFETY_HEADROOM,
+            CURRENT_AMPS
+        ];
+    }
+
+    //! Read exactly once on connect. These are the only characteristics that
+    //! answer a read, and they never change during a session.
+    function readOnceCharacteristics() as Lang.Array {
+        return [ SERIAL_NUMBER, FIRMWARE_REV, HARDWARE_REV ];
     }
 
     function uuid(shortForm) {
