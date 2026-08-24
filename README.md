@@ -34,7 +34,7 @@ MIT licensed. No accounts, no telemetry, no ads, no paid tier.
 Requires Connect IQ **3.1.0** or later, `BluetoothLowEnergy` support, and
 enough watch-app memory for the BLE stack alongside a UI.
 
-Reference device is the **fēnix 6X Pro / Sapphire / Pro Solar**. Also built for
+Reference device is the **fēnix 6 Sapphire** (`fenix6pro`). Also built for
 fēnix 6 / 6S Pro, fēnix 7 / 7S / 7X, epix (Gen 2), Forerunner 945 / 955 / 965,
 Venu 2 / 2S, and vívoactive 4 / 4S.
 
@@ -58,7 +58,9 @@ Not yet on the Connect IQ Store. To side-load:
 1. Install the [Connect IQ SDK](https://developer.garmin.com/connect-iq/sdk/)
    and download your device in the SDK Manager.
 2. Build for your watch (see [Building](#building) for the toolchain setup).
-3. Copy `bin/carve-fenix6xpro.prg` to `GARMIN/APPS/` on the watch over USB,
+3. Copy the `.prg` built for **your exact device** to `GARMIN/Apps/` over USB
+   (check `GarminDevice.xml` on the watch - a wrong-target build installs and
+   runs but its BLE silently does nothing),
    and eject.
 
 Settings live in Garmin Connect → your device → Connect IQ Apps → carve, or in
@@ -101,7 +103,7 @@ openssl genrsa -out developer_key.pem 4096 && openssl pkcs8 -topk8 -inform PEM -
 Build for a single device:
 
 ```bash
-monkeyc -f monkey.jungle -d fenix6xpro -o bin/carve-fenix6xpro.prg -y developer_key.der -w
+monkeyc -f monkey.jungle -d fenix6pro -o bin/carve-fenix6pro.prg -y developer_key.der -w
 ```
 
 Build the store package for every device in the manifest:
@@ -117,7 +119,7 @@ and nullability mistakes that Monkey C otherwise defers to a crash on-wrist.
 To run in the simulator:
 
 ```bash
-connectiq && monkeydo bin/carve-fenix6xpro.prg fenix6xpro
+connectiq && monkeydo bin/carve-fenix6pro.prg fenix6pro
 ```
 
 `monkeydo` stays attached while the app runs; that is normal, not a hang.

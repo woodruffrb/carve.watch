@@ -31,57 +31,45 @@ All characteristics share the `e659fXXX-ea98-11e3-ac10-0800200c9a66` pattern;
 only the third group varies, so the code stores the 16-bit short form and
 expands it.
 
-## BLOCKER: Connect IQ BLE is non-functional on the test fenix 6X
+## Build for the right device - this cost a full debugging session
 
-Status as of 2026-08-23. **This blocks the project on this device.** Read
-this before spending any time on the app's BLE code.
+The reference watch is a **fenix 6 Sapphire**, which is product ID
+**`fenix6pro`**, not `fenix6xpro`. Confirmed from `GarminDevice.xml`:
 
-On the reference watch - fenix 6X Sapphire, firmware 28.02, Connect IQ
-5.1.1 - the Connect IQ BLE callback path does not work at all:
+```
+<Description>fenix 6 Sapphire</Description>
+<PartNumber>006-B3290-00</PartNumber>
+<VmVersion>3.4.5</VmVersion>
+```
 
-| Observation | Result |
-|---|---|
-| `getAvailableConnectionCount()` | returns 3 - subsystem answers |
-| `setDelegate()` | succeeds, no throw |
-| `registerProfile()` | accepted, no throw |
-| `onProfileRegister` | **never invoked**, 0 callbacks / 3 timeouts |
-| Scanning | **zero** results, with many BLE devices nearby |
-| Watch radio | fine - phone paired, "find my phone" works |
+The SDK maps part numbers unambiguously:
 
-**This is not carve's bug.** Garmin's own `NordicThingy52` sample, built
-from the SDK unmodified and sideloaded to the same watch, shows 0 devices
-and never registers either. Any app-side theory is refuted by that.
+| Part number | Product ID | Covers |
+|---|---|---|
+| `006-B3290-00` | `fenix6pro` | fenix 6 Pro / **6 Sapphire** / 6 Pro Solar |
+| `006-B3291-00` | `fenix6xpro` | fenix 6X Pro / 6X Sapphire / tactix Delta |
 
-Ruled out by measurement, in order: characteristic count, profile budget,
-descriptor lists, the radio being off, stale app UUID metadata, registration
-timing, and the profile Dictionary structure - which was checked
-key-for-key against the SDK sample and is identical.
+A `.prg` built for `fenix6xpro` **installs and runs on a `fenix6pro`**. The
+Monkey C executes, the UI renders at correct proportions because the layout
+is computed from `dc` dimensions - and the BLE layer silently does nothing.
+Every call is accepted, no exception is thrown, and no callback is ever
+delivered.
 
-### Related known Garmin issues
+That failure mode is indistinguishable from a broken profile definition,
+and an entire session was spent chasing it: characteristic count, profile
+budget, descriptor lists, radio state, stale app UUID metadata, and
+registration timing were each investigated and eliminated. Garmin's own
+NordicThingy52 sample, built for the same wrong target, failed identically -
+which correctly proved the fault was not in this app, but did not reveal
+why.
 
-- An acknowledged bug report states BLE peripherals advertising as **"LE
-  Only"** fail to appear in Connect IQ scans. The board advertises exactly
-  that: `Device type: LE only`, `BR/EDR Not Supported`. No fix documented.
-- A separate report describes fenix 6X Pro scanning working "very
-  intermittently", and peripherals advertising **128-bit** service UUIDs
-  not surfacing while 16-bit advertisers do. The board's service UUID is
-  128-bit.
+**Verify the target before debugging BLE.** Read `GarminDevice.xml` from the
+watch root and match `PartNumber` against the SDK device definitions in
+`%APPDATA%/Garmin/ConnectIQ/Devices/*/`. Do not take the model from memory
+or from what the watch is called colloquially.
 
-Neither fully explains scanning returning nothing *and* registration never
-calling back, which suggests a firmware regression rather than the
-advertising-format limitation alone.
-
-### What would actually move this forward
-
-1. **Firmware.** Check for a fenix 6X update; this smells like a regression.
-2. **A second device.** fenix 7 / 8 or epix would establish whether this is
-   specific to fenix 6X. The app builds clean for 20 devices already.
-3. **Report it.** With the SDK sample failing identically, this is a clean
-   reproduction to hand Garmin.
-
-Until CIQ BLE works on some device, no amount of protocol work matters -
-the unlock handshake and the characteristic map below remain untested
-because nothing can connect.
+Both `fenix6pro` and `fenix6xpro` do declare `BluetoothLowEnergy` support,
+so there is no capability difference here - only a wrong binary.
 
 ## Before debugging anything on the watch
 
