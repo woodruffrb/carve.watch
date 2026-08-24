@@ -145,6 +145,14 @@ class BoardLink extends Ble.BleDelegate {
     private var _lastCalcSum = -1;
     private var _lastRecvSum = -1;
 
+    //! The response actually written to the board.
+    //!
+    //! The algorithm has been verified off-device against a captured
+    //! challenge, so the open question is whether this Monkey C produces the
+    //! same bytes. Without showing them that is unanswerable, and it has
+    //! already been guessed at once too often.
+    private var _lastResponse as Lang.ByteArray = []b;
+
     private var _spanAttempt = 0;
     private var _spanVariant = 0;
     private var _spanSolved = -1;
@@ -297,6 +305,7 @@ class BoardLink extends Ble.BleDelegate {
     function getScanResultCount() as Lang.Number { return _scanResultCount; }
     function isHandshakeSkipped() as Lang.Boolean { return _handshakeSkipped; }
     function getLastFrame() as Lang.ByteArray { return _lastFrame; }
+    function getLastResponse() as Lang.ByteArray { return _lastResponse; }
     function getLastCalcSum() as Lang.Number { return _lastCalcSum; }
     function getLastRecvSum() as Lang.Number { return _lastRecvSum; }
     function getSpanVariant() as Lang.Number { return _spanVariant; }
@@ -579,6 +588,7 @@ class BoardLink extends Ble.BleDelegate {
 
         var response = Unlock.buildResponse(frame, _spanVariant);
         if (response == null) { return; }
+        _lastResponse = response;
 
         _unlockAttempts++;
         _responsesSent++;

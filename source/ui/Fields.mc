@@ -129,6 +129,10 @@ module Fields {
             case F_HEADROOM: {
                 var h = state.get(BoardState.HEADROOM);
                 if (h == null) { return Alerts.SEV_NONE; }
+                // Same reasoning as the headroom alert: meaningless at rest,
+                // so do not paint a parked board's field red.
+                var rpm = state.get(BoardState.RPM);
+                if (rpm == null || rpm <= 3) { return Alerts.SEV_NONE; }
                 if (h <= 10) { return Alerts.SEV_CRITICAL; }
                 if (h <= 25) { return Alerts.SEV_WARNING; }
                 break;

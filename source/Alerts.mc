@@ -40,6 +40,10 @@ class AlertEngine {
     //! a solid wall of vibration.
     static const BUZZ_COOLDOWN_MS = 3000;
 
+    //! Wheel RPM above which the board counts as moving. Low enough to catch
+    //! a slow roll, high enough to ignore sensor jitter on a parked board.
+    static const MOVING_RPM = 3;
+
     // Thresholds, overridable from settings.
     private var _battWarnPct = 20;
     private var _battCritPct = 10;
@@ -86,9 +90,20 @@ class AlertEngine {
     //! Safety headroom is the board's own margin before it starts pushing
     //! back. It is the earliest warning available that a nosedive is coming,
     //! which is why it outranks everything else.
+    //!
+    //! It is only meaningful under load. A stationary board reports 0, which
+    //! is indistinguishable from a genuine emergency by value alone - the
+    //! first live hardware run raised a critical HEADROOM 0% alert against a
+    //! board parked on a bench. Motion is what makes the reading mean
+    //! anything, so the alert requires it.
     private function checkHeadroom(state) {
         var h = state.get(BoardState.HEADROOM);
         if (h == null) { return; }
+
+        if (!isMoving(state)) {
+            clear(C_HEADROOM);
+            return;
+        }
 
         if (h <= _headroomCrit) {
             raise(C_HEADROOM, Alerts.SEV_CRITICAL, "HEADROOM", h + "%");
@@ -113,6 +128,13 @@ class AlertEngine {
         } else {
             clear(C_ERROR);
         }
+    }
+
+    //! Whether the wheel is actually turning. Several board values are only
+    //! interpretable under load, and a parked board should be quiet.
+    private function isMoving(state) {
+        var rpm = state.get(BoardState.RPM);
+        return (rpm != null) && (rpm > MOVING_RPM);
     }
 
     private function checkTemp(state) {
