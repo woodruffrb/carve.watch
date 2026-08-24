@@ -157,6 +157,17 @@ class BoardLink extends Ble.BleDelegate {
     //! same bytes. Without showing them that is unanswerable, and it has
     //! already been guessed at once too often.
     private var _lastResponse as Lang.ByteArray = []b;
+    //! The most recent UART frame, and how many times the content changed.
+    //!
+    //! _lastFrame is frozen at the first frame for comparison against the
+    //! response, which means nothing has ever observed whether the UART
+    //! content varies. If these frames change while riding they are telemetry,
+    //! not challenges - which would explain every telemetry characteristic
+    //! reading zero while the board is clearly working.
+    private var _liveFrame as Lang.ByteArray = []b;
+    private var _distinctFrames = 0;
+    private var _lastResponseWriteStatus = -1;
+
     private var _unlockSentMs = 0;
     private var _awaitingTelemetry = false;
 
@@ -313,6 +324,9 @@ class BoardLink extends Ble.BleDelegate {
     function isHandshakeSkipped() as Lang.Boolean { return _handshakeSkipped; }
     function getLastFrame() as Lang.ByteArray { return _lastFrame; }
     function getLastResponse() as Lang.ByteArray { return _lastResponse; }
+    function getLiveFrame() as Lang.ByteArray { return _liveFrame; }
+    function getDistinctFrames() as Lang.Number { return _distinctFrames; }
+    function getResponseWriteStatus() as Lang.Number { return _lastResponseWriteStatus; }
     function getLastCalcSum() as Lang.Number { return _lastCalcSum; }
     function getLastRecvSum() as Lang.Number { return _lastRecvSum; }
     function getSpanVariant() as Lang.Number { return _spanVariant; }
@@ -559,6 +573,14 @@ class BoardLink extends Ble.BleDelegate {
         }
     }
 
+    private function sameBytes(a as Lang.ByteArray, b as Lang.ByteArray) as Lang.Boolean {
+        if (a.size() != b.size()) { return false; }
+        for (var i = 0; i < a.size(); i++) {
+            if (a[i] != b[i]) { return false; }
+        }
+        return true;
+    }
+
     private function dropHead() {
         if (_queue.size() > 0) {
             _queue = _queue.slice(1, null);
@@ -603,6 +625,12 @@ class BoardLink extends Ble.BleDelegate {
 
         var frame = _rxBuffer.slice(0, Unlock.FRAME_LEN);
         _rxBuffer = []b;
+
+        // Always track the live frame and whether it is changing.
+        if (!sameBytes(_liveFrame, frame)) {
+            _distinctFrames++;
+            _liveFrame = frame;
+        }
 
         // Record the FIRST frame and hold it.
         //
@@ -817,6 +845,7 @@ class BoardLink extends Ble.BleDelegate {
         if (_state == STATE_UNLOCKING
             && status == Ble.STATUS_SUCCESS
             && characteristic.getUuid().equals(BoardUuids.uuid(BoardUuids.UART_WRITE))) {
+            _lastResponseWriteStatus = status;
             // The reference client stops listening on the UART characteristic
             // once the response is written, waits briefly, then reads. That
             // final step was missing here, and worse: a fresh challenge was

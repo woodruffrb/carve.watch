@@ -32,7 +32,7 @@ class DiagnosticsView extends WatchUi.View {
     //! Split three ways because fifteen rows on one 260 px screen overlap
     //! into illegibility - diagnostics that cannot be read are not
     //! diagnostics.
-    static const STATUS_PAGES = 5;
+    static const STATUS_PAGES = 6;
 
     function initialize(link) {
         View.initialize();
@@ -118,6 +118,17 @@ class DiagnosticsView extends WatchUi.View {
                 [ "reg try", _link.getRegisterAttempts().format("%d") ],
                 [ "status",  _link.getLastStatus().format("%d") ],
                 [ "reg err", trunc(_link.getLastError(), 12) ]
+            ];
+        } else if (page == 5) {
+            title = "uart live";
+            var lf = _link.getLiveFrame();
+            rows = [
+                [ "L0-4",   hexRange(lf, 0, 5) ],
+                [ "L5-9",   hexRange(lf, 5, 10) ],
+                [ "L10-14", hexRange(lf, 10, 15) ],
+                [ "L15-19", hexRange(lf, 15, 20) ],
+                [ "changed", _link.getDistinctFrames().format("%d")
+                             + " w" + _link.getResponseWriteStatus().format("%d") ]
             ];
         } else if (page == 4) {
             title = "resp";
