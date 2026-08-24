@@ -31,6 +31,22 @@ All characteristics share the `e659fXXX-ea98-11e3-ac10-0800200c9a66` pattern;
 only the third group varies, so the code stores the 16-bit short form and
 expands it.
 
+## Before debugging anything on the watch
+
+**Bluetooth must be enabled on the watch itself.** With the radio off,
+`BluetoothLowEnergy.registerProfile()` is accepted and then does nothing -
+no exception, no `onProfileRegister` callback - and every diagnostic points
+at the profile definition instead of the radio. Three separate theories
+(characteristic count, profile budget, descriptor list) were investigated
+before the radio turned out to be off.
+
+Diagnostics page 1 shows a `phone` row as a proxy. If it reads `no`, fix
+that before reading anything else on the page.
+
+Note that the *phone's* Bluetooth is a separate matter: the board accepts
+only one BLE connection, so the phone must not be holding it. Watch radio
+on, phone radio off.
+
 ## Advertising
 
 Verified from a scanner capture of an XR, 2026-08-23:
