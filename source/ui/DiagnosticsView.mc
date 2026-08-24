@@ -28,6 +28,12 @@ class DiagnosticsView extends WatchUi.View {
     static const COLS = 2;
     static const PER_PAGE = ROWS * COLS;
 
+    //! Status pages before the raw sweep: handshake, register, system.
+    //! Split three ways because fifteen rows on one 260 px screen overlap
+    //! into illegibility - diagnostics that cannot be read are not
+    //! diagnostics.
+    static const STATUS_PAGES = 3;
+
     function initialize(link) {
         View.initialize();
         _link = link;
@@ -36,7 +42,7 @@ class DiagnosticsView extends WatchUi.View {
     function pageCount() {
         var sweep = _link.getRegistered().size();
         var rawPages = (sweep + PER_PAGE - 1) / PER_PAGE;
-        return 1 + rawPages;
+        return STATUS_PAGES + rawPages;
     }
 
     function nextPage() {
@@ -56,10 +62,10 @@ class DiagnosticsView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_TRANSPARENT, Theme.bg);
         dc.clear();
 
-        if (_page == 0) {
-            drawLinkPage(dc, w, h);
+        if (_page < STATUS_PAGES) {
+            drawLinkPage(dc, w, h, _page);
         } else {
-            drawRawPage(dc, w, h, _page - 1);
+            drawRawPage(dc, w, h, _page - STATUS_PAGES);
         }
 
         // Page indicator, so it is obvious there is more than one screen.
@@ -82,57 +88,62 @@ class DiagnosticsView extends WatchUi.View {
     //!   rx > 0, challenge 0   bytes arriving but no valid CRX frame
     //!   challenge > 0, sent 0 frame parsed, response could not be built
     //!   sent > 0, still shake response written and rejected - MD5_SPAN
-    private function drawLinkPage(dc, w, h) {
-        var state = _link.getBoardState();
+    private function drawLinkPage(dc, w, h, page) {
+        var rows;
+        var title;
+
+        if (page == 0) {
+            title = "handshake";
+            rows = [
+                [ "rx bytes",  _link.getRxTotal().format("%d") ],
+                [ "challenge", _link.getChallengesSeen().format("%d") ],
+                [ "bad frame", _link.getBadFrames().format("%d") ],
+                [ "sent",      _link.getResponsesSent().format("%d") ],
+                [ "attempts",  _link.getUnlockAttempts().format("%d") ]
+            ];
+        } else if (page == 1) {
+            title = "register";
+            rows = [
+                [ "tier",    _link.getTierIndex().format("%d")
+                             + "(" + _link.getRegistered().size().format("%d") + ")"
+                             + (_link.isProfileReady() ? " ok" : " ..") ],
+                [ "reg cb",  _link.getProfileCallbacks().format("%d")
+                             + "/" + _link.getTimeouts().format("%d") + "t" ],
+                [ "reg try", _link.getRegisterAttempts().format("%d") ],
+                [ "status",  _link.getLastStatus().format("%d") ],
+                [ "reg err", trunc(_link.getLastError(), 12) ]
+            ];
+        } else {
+            title = "system";
+            rows = [
+                [ "scan cb",   _link.getScanCallbacks().format("%d")
+                               + " " + _link.getLastScanState().format("%d")
+                               + "/" + _link.getLastScanStatus().format("%d") ],
+                [ "scan hits", _link.getScanResultCount().format("%d") ],
+                [ "cccd",      _link.usesDescriptors() ? "yes" : "no" ],
+                [ "ble conn",  bleConnProbe() ],
+                [ "build",     Version.BUILD ]
+            ];
+        }
 
         dc.setColor(Theme.accent, Graphics.COLOR_TRANSPARENT);
         dc.drawText(w / 2, h * 0.13, Graphics.FONT_XTINY,
-            linkStateName() + "  " + fmt(state.rssi) + "dBm",
+            linkStateName() + " " + title,
             Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        var rows = [
-            [ "rx bytes",  _link.getRxTotal().format("%d") ],
-            [ "challenge", _link.getChallengesSeen().format("%d") ],
-            [ "bad frame", _link.getBadFrames().format("%d") ],
-            [ "sent",      _link.getResponsesSent().format("%d") ],
-            [ "tier",      _link.getTierIndex().format("%d")
-                           + " (" + _link.getRegistered().size().format("%d") + ")"
-                           + (_link.isProfileReady() ? " ok" : " ...") ],
-            [ "reg try",   _link.getRegisterAttempts().format("%d") ],
-            [ "fw",        fmt(state.peek(BoardState.FIRMWARE)) ],
-            [ "build",     Version.BUILD ],
-            [ "reg err",   trunc(_link.getLastError(), 14) ],
-            [ "cccd",      _link.usesDescriptors() ? "yes" : "no" ],
-            [ "reg cb",    _link.getProfileCallbacks().format("%d")
-                           + "/" + _link.getTimeouts().format("%d") + "t" ],
-            [ "status",    _link.getLastStatus().format("%d") ],
-            [ "delegate",  CarveApp._delegateSet ? "set" : "FAILED" ],
-            [ "scan cb",   _link.getScanCallbacks().format("%d")
-                           + " st" + _link.getLastScanState().format("%d")
-                           + "/" + _link.getLastScanStatus().format("%d") ],
-            [ "scan hits", _link.getScanResultCount().format("%d") ],
-            // getAvailableConnectionCount is a direct probe of whether the
-            // BLE subsystem is alive at all, unlike phoneConnected which only
-            // reports phone pairing and is false whenever the phone's radio
-            // is off. A non-zero count means BLE is up and the fault is in
-            // the profile; zero or "err" means the subsystem itself is not.
-            [ "ble conn",  bleConnProbe() ],
-            [ "phone",     System.getDeviceSettings().phoneConnected ? "conn" : "none" ]
-        ];
-
-        var top = h * 0.26;
-        var rowH = (h * 0.58) / rows.size();
+        var top = h * 0.28;
+        var rowH = (h * 0.54) / rows.size();
 
         for (var i = 0; i < rows.size(); i++) {
             var row = rows[i] as Lang.Array;
             var cy = top + (i * rowH);
 
             dc.setColor(Theme.textMuted, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w * 0.46, cy, Graphics.FONT_XTINY, row[0],
+            dc.drawText(w * 0.48, cy, Graphics.FONT_XTINY, row[0],
                 Graphics.TEXT_JUSTIFY_RIGHT | Graphics.TEXT_JUSTIFY_VCENTER);
 
             dc.setColor(Theme.text, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(w * 0.52, cy, Graphics.FONT_XTINY, row[1],
+            dc.drawText(w * 0.54, cy, Graphics.FONT_XTINY, row[1],
                 Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
         }
     }
