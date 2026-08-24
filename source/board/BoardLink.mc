@@ -305,30 +305,44 @@ class BoardLink extends Ble.BleDelegate {
     //! Iterators here yield Object, so each element needs an explicit cast
     //! before its ScanResult / Uuid members are reachable.
     //!
-    //! Matching is by advertised service UUID rather than by device name.
-    //! Names are user-editable and localised; the service UUID is what
-    //! actually identifies a board.
+    //! Matching accepts either the advertised service UUID or the device name
+    //! prefix. Service UUID is the better identifier and is tried first, but
+    //! getServiceUuids() reads the *advertisement*, not the GATT table - a
+    //! peripheral is free to expose a service it never advertises. Boards name
+    //! themselves "OW" followed by digits, which is a serviceable fallback.
     function onScanResults(scanResults) {
         if (_state != STATE_SCANNING) { return; }
 
         for (var item = scanResults.next(); item != null; item = scanResults.next()) {
             var result = item as Ble.ScanResult;
 
-            // getServiceUuids always returns an iterator, never null - a guard
-            // here is dead code, and the compiler says so.
-            var uuids = result.getServiceUuids();
-
-            for (var u = uuids.next(); u != null; u = uuids.next()) {
-                var uuid = u as Ble.Uuid;
-                if (uuid.equals(BoardUuids.serviceUuid())) {
-                    _boardState.rssi = result.getRssi();
-                    stopScan();
-                    _state = STATE_CONNECTING;
-                    _device = Ble.pairDevice(result);
-                    return;
-                }
+            if (advertisesService(result) || nameLooksLikeBoard(result)) {
+                _boardState.rssi = result.getRssi();
+                stopScan();
+                _state = STATE_CONNECTING;
+                _device = Ble.pairDevice(result);
+                return;
             }
         }
+    }
+
+    private function advertisesService(result as Ble.ScanResult) as Lang.Boolean {
+        // getServiceUuids always returns an iterator, never null - a guard
+        // here is dead code, and the compiler says so.
+        var uuids = result.getServiceUuids();
+        for (var u = uuids.next(); u != null; u = uuids.next()) {
+            var uuid = u as Ble.Uuid;
+            if (uuid.equals(BoardUuids.serviceUuid())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function nameLooksLikeBoard(result as Ble.ScanResult) as Lang.Boolean {
+        var name = result.getDeviceName();
+        if (name == null || name.length() < 2) { return false; }
+        return name.substring(0, 2).toLower().equals("ow");
     }
 
     function onConnectedStateChanged(device, state) {

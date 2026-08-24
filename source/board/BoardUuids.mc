@@ -54,9 +54,13 @@ module BoardUuids {
         ];
     }
 
-    //! Characteristics that push updates. Everything else is polled on the
-    //! 1 Hz tick, because subscribing to all of them at once exceeds what the
-    //! board reliably delivers.
+    //! Characteristics we subscribe to rather than poll.
+    //!
+    //! Every telemetry characteristic on the board is NOTIFY+READ+WRITE with a
+    //! CCCD, confirmed by GATT dump - so this split is a resource decision,
+    //! not a capability limit. These three change fastest and are worth the
+    //! subscription; the rest are read on the tick to keep the number of
+    //! CCCD writes at connect time small and bound notification traffic.
     function notifyCharacteristics() as Lang.Array {
         return [ BATTERY_PCT, RPM, STATUS_ERROR ];
     }

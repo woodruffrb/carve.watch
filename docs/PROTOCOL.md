@@ -23,6 +23,10 @@ faster way to do the same job.
 |---|---|---|
 | `e659f300-ea98-11e3-ac10-0800200c9a66` | Primary board service | **[V]** |
 
+Confirmed as a PRIMARY SERVICE by GATT dump of an XR (`OW111222`) on
+2026-08-23. The board exposes a contiguous characteristic range `e659f301`
+through at least `e659f320`, plus the two UART characteristics.
+
 All characteristics share the `e659fXXX-ea98-11e3-ac10-0800200c9a66` pattern;
 only the third group varies, so the code stores the 16-bit short form and
 expands it.
@@ -49,10 +53,38 @@ expands it.
 | `f317` | Safety headroom | uint8 | **[C]** |
 | `f319` | Lifetime odometer | uint16 | **[C]** |
 | `f31c` | Last error code | uint16 | **[C]** |
-| `f3fe` | UART serial **read** (notify) | bytes | **[V]** |
-| `f3ff` | UART serial **write** | bytes | **[C]** |
+| `f3fe` | UART serial **read** | notify only | **[V]** |
+| `f3ff` | UART serial **write** | write only | **[V]** |
 
 Multi-byte values are **big-endian**.
+
+### Properties (verified)
+
+The GATT dump settles what these characteristics can do, which is separate
+from what they *mean*:
+
+- **`f301`–`f320`**: every one is `NOTIFY, READ, WRITE`, each carrying both a
+  CCCD (`0x2902`) and a Characteristic User Description (`0x2901`). So any
+  telemetry value can be either subscribed or polled - the choice in
+  `BoardUuids.notifyCharacteristics()` is about resource use, not capability.
+- **`f3fe`**: `NOTIFY` only, with a CCCD. The read side of the UART pair.
+- **`f3ff`**: `WRITE` only, no CCCD. The write side.
+
+The UART pair is now verified, which removes the largest single risk in the
+handshake: the response is being written to the right characteristic.
+
+### The 0x2901 descriptors are the remaining shortcut
+
+Every characteristic carries a **Characteristic User Description**
+(`0x2901`) - the board self-describes each value with a human-readable name.
+Reading those descriptors yields the authoritative name for every UUID and
+would retire every remaining **[C]** tag in the table above at a stroke.
+
+Connect IQ cannot help here: it only reaches characteristics registered up
+front, so the watch cannot enumerate what it does not already know. Read them
+from a phone (nRF Connect: tap the download arrow beside each
+*Characteristic User Description* row) or from
+`chrome://bluetooth-internals`.
 
 ## The unlock handshake
 
