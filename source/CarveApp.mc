@@ -54,6 +54,11 @@ class CarveApp extends Application.AppBase {
         }
         _link.registerProfiles();
 
+        // Scanning starts here rather than waiting on onProfileRegister.
+        // Discovery does not need the profile, and waiting on a callback that
+        // may never arrive meant the scan path was never exercised at all.
+        _link.startScan();
+
         Fields.resetSession();
 
         _tick = new Timer.Timer();

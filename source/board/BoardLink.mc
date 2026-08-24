@@ -94,6 +94,16 @@ class BoardLink extends Ble.BleDelegate {
     private var _lastError as Lang.String = "";
     private var _useDescriptors = true;
 
+    // Scan-path instrumentation, separate from registration.
+    //
+    // onScanStateChange was never implemented, so there has been no evidence
+    // about whether the scan subsystem responds at all - only about
+    // registration. These are different code paths and may fail differently.
+    private var _scanCallbacks = 0;
+    private var _lastScanStatus = -1;
+    private var _lastScanState = -1;
+    private var _scanResultCount = 0;
+
     // Registration outcome instrumentation.
     //
     // The earlier "timeout" label was set in the tiers-exhausted branch, not
@@ -232,6 +242,10 @@ class BoardLink extends Ble.BleDelegate {
     function getProfileCallbacks() as Lang.Number { return _profileCallbacks; }
     function getLastStatus() as Lang.Number { return _lastStatus; }
     function getTimeouts() as Lang.Number { return _timeouts; }
+    function getScanCallbacks() as Lang.Number { return _scanCallbacks; }
+    function getLastScanStatus() as Lang.Number { return _lastScanStatus; }
+    function getLastScanState() as Lang.Number { return _lastScanState; }
+    function getScanResultCount() as Lang.Number { return _scanResultCount; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
@@ -245,10 +259,22 @@ class BoardLink extends Ble.BleDelegate {
     //! connection made without a registered profile exposes no characteristics
     //! at all. The app calls this once at startup and again on disconnect, so
     //! a not-yet-ready profile simply defers to the next call.
+    //! Scanning deliberately does NOT wait for profile registration.
+    //!
+    //! The profile governs GATT operations once connected; discovery does not
+    //! need it. Gating the scan on _profileReady meant that when registration
+    //! silently failed, the app never even attempted to scan - so a
+    //! registration fault and a scan fault were indistinguishable, and the
+    //! scan path went completely untested.
     function startScan() {
-        if (_state == STATE_PROFILE_FAILED || !_profileReady) { return; }
         _state = STATE_SCANNING;
-        Ble.setScanState(Ble.SCAN_STATE_SCANNING);
+        try {
+            Ble.setScanState(Ble.SCAN_STATE_SCANNING);
+        } catch (ex) {
+            var m = ex.getErrorMessage();
+            _lastError = (m == null) ? "scan throw" : m;
+            _state = STATE_PROFILE_FAILED;
+        }
     }
 
     function stopScan() {
@@ -471,6 +497,15 @@ class BoardLink extends Ble.BleDelegate {
     //! A non-success status is the other way an over-wide tier fails, so it
     //! falls back rather than giving up. tryRegisterTier gives up on its own
     //! once the tiers are exhausted.
+    //! Reports whether the scan subsystem accepted the state change. If this
+    //! fires while onProfileRegister never does, BLE callbacks work and the
+    //! fault is confined to registration.
+    function onScanStateChange(scanState, status) {
+        _scanCallbacks++;
+        _lastScanState = (scanState == null) ? -2 : scanState;
+        _lastScanStatus = (status == null) ? -2 : status;
+    }
+
     function onProfileRegister(uuid, status) {
         _profileCallbacks++;
         _lastStatus = (status == null) ? -2 : status;
@@ -492,10 +527,10 @@ class BoardLink extends Ble.BleDelegate {
     //! peripheral is free to expose a service it never advertises. Boards name
     //! themselves "OW" followed by digits, which is a serviceable fallback.
     function onScanResults(scanResults) {
-        if (_state != STATE_SCANNING) { return; }
 
         for (var item = scanResults.next(); item != null; item = scanResults.next()) {
             var result = item as Ble.ScanResult;
+            _scanResultCount++;
 
             if (advertisesService(result) || nameLooksLikeBoard(result)) {
                 _boardState.rssi = result.getRssi();
