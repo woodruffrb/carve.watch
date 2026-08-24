@@ -31,36 +31,27 @@ module BoardUuids {
     const UART_READ      = "e659f3fe";
     const UART_WRITE     = "e659f3ff";
 
-    //! Registration tiers, widest first.
+    //! Registration ladder. BoardLink walks it until one registers.
     //!
-    //! Connect IQ caps how much can be registered and the exact limit is
-    //! undocumented, so rather than guess a safe number, BoardLink tries these
-    //! in order and falls back on failure. Tier 0 sweeps the board's entire
-    //! characteristic range, which is what lets Diagnostics identify a value
-    //! by behaviour when a UUID guess is wrong. Tier 2 is the minimum the
-    //! shipped field set needs.
+    //! Deliberately short. Connect IQ allows at most 3 registered profiles per
+    //! app lifetime and every attempt spends one, so a long wide-to-narrow
+    //! ladder defeats itself: it burns the budget and the later, narrower
+    //! rungs then fail on the profile cap rather than on their width.
     //!
-    //! A descending ladder. BoardLink walks it until one registers.
+    //! Measured on a fenix 6X: a 34-characteristic registration is refused in
+    //! silence - no throw, no callback - and a six-rung ladder ended in a
+    //! blanket failure that looked like a width limit but was the attempt cap.
+    //! So this starts at a width expected to succeed rather than probing down
+    //! from the top.
     //!
-    //! The top rungs are contiguous sweeps for discovery - they let
-    //! Diagnostics identify a characteristic by behaviour. The lower rungs
-    //! switch to the specific non-contiguous set the app needs, because a
-    //! narrow contiguous sweep would exclude RPM, status and headroom and
-    //! leave the app connected but useless.
-    //!
-    //! Measured on hardware: 34 characteristics is silently refused by a
-    //! fenix 6X - no throw, no callback. The real limit is discovered by
-    //! walking down, and whichever rung sticks is shown on Diagnostics page 1,
-    //! so the ceiling gets recorded rather than guessed at.
+    //! The wide contiguous sweep used for characteristic discovery is still in
+    //! sweepTo(); reintroduce it only once the working ceiling is known, and
+    //! never as the first attempt.
     //!
     //! Returns null past the last tier, which BoardLink treats as fatal.
     function tier(index as Lang.Number) as Lang.Array? {
-        if (index == 0) { return sweepTo(0x20); }   // 34 - full discovery
-        if (index == 1) { return sweepTo(0x16); }   // 24
-        if (index == 2) { return sweepTo(0x0e); }   // 16
-        if (index == 3) { return sweepTo(0x0a); }   // 12
-        if (index == 4) { return essential(); }     // 10 - app functional
-        if (index == 5) { return minimal(); }       //  6 - handshake + core
+        if (index == 0) { return essential(); }   // 10 - app functional
+        if (index == 1) { return minimal(); }     //  6 - handshake + core
         return null;
     }
 

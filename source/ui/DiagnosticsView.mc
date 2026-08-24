@@ -98,7 +98,9 @@ class DiagnosticsView extends WatchUi.View {
                            + " (" + _link.getRegistered().size().format("%d") + ")"
                            + (_link.isProfileReady() ? " ok" : " ...") ],
             [ "reg try",   _link.getRegisterAttempts().format("%d") ],
-            [ "fw",        fmt(state.peek(BoardState.FIRMWARE)) ]
+            [ "fw",        fmt(state.peek(BoardState.FIRMWARE)) ],
+            [ "build",     Version.BUILD ],
+            [ "reg err",   trunc(_link.getLastError(), 14) ]
         ];
 
         var top = h * 0.26;
@@ -171,6 +173,17 @@ class DiagnosticsView extends WatchUi.View {
         }
         if (bytes.size() > 4) { s += ".."; }
         return s;
+    }
+
+    //! Keep a message inside one row. An exception string is often longer
+    //! than the screen, and a clipped-but-present message still says which
+    //! kind of failure this is.
+    private function trunc(s as Lang.String, n as Lang.Number) as Lang.String {
+        // getLastError() returns "" rather than null, so no null guard here -
+        // the compiler correctly calls one dead.
+        if (s.length() == 0) { return "-"; }
+        if (s.length() <= n) { return s; }
+        return s.substring(0, n);
     }
 
     private function fmt(v) {

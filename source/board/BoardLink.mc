@@ -50,6 +50,16 @@ class BoardLink extends Ble.BleDelegate {
     //! therefore treated as failure, and falls back to a narrower tier.
     static const REGISTER_TIMEOUT_MS = 4000;
 
+    //! Connect IQ allows at most 3 registered profiles per app lifetime, and
+    //! every attempt spends one whether or not it succeeds.
+    //!
+    //! This is why the original wide-to-narrow ladder could not work: six
+    //! attempts burned the budget, so the last three failed on the profile cap
+    //! rather than on their width, and the app reported a width problem that
+    //! was really an attempt-count problem. Keep the ladder shorter than the
+    //! cap and start at a width that is expected to succeed.
+    static const MAX_REGISTER_ATTEMPTS = 3;
+
     private var _state = STATE_IDLE;
     private var _device = null;
     private var _profileReady = false;
@@ -69,6 +79,7 @@ class BoardLink extends Ble.BleDelegate {
     private var _registered as Lang.Array = [];
     private var _registerPendingSince = 0;
     private var _registerAttempts = 0;
+    private var _lastError as Lang.String = "";
 
     // ---- handshake instrumentation --------------------------------------
     // Read by DiagnosticsView. Without these a stalled handshake is opaque:
@@ -112,9 +123,18 @@ class BoardLink extends Ble.BleDelegate {
     }
 
     private function tryRegisterTier(index as Lang.Number) as Void {
+        if (_registerAttempts >= MAX_REGISTER_ATTEMPTS) {
+            // Out of profile budget. Trying again cannot succeed and would
+            // only replace a real error message with a cap error.
+            if (_lastError.equals("")) { _lastError = "budget"; }
+            _state = STATE_PROFILE_FAILED;
+            return;
+        }
+
         var shortForms = BoardUuids.tier(index);
         if (shortForms == null) {
             // Even the minimum was refused. Nothing further to try.
+            if (_lastError.equals("")) { _lastError = "timeout"; }
             _state = STATE_PROFILE_FAILED;
             return;
         }
@@ -146,6 +166,12 @@ class BoardLink extends Ble.BleDelegate {
                 :characteristics => chars
             });
         } catch (ex) {
+            // Keep the message. Discarding it is what turned a diagnosable
+            // failure into three rounds of guessing - the exception says
+            // whether this is a permission problem, a profile-budget problem
+            // or something else entirely.
+            var msg = ex.getErrorMessage();
+            _lastError = (msg == null) ? "throw" : msg;
             tryRegisterTier(index + 1);
         }
     }
@@ -170,6 +196,7 @@ class BoardLink extends Ble.BleDelegate {
     function getTierIndex() as Lang.Number { return _tierIndex; }
     function getRegisterAttempts() as Lang.Number { return _registerAttempts; }
     function isProfileReady() as Lang.Boolean { return _profileReady; }
+    function getLastError() as Lang.String { return _lastError; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
