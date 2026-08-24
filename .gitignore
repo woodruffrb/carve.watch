@@ -1,0 +1,9 @@
+bin/
+gen/
+*.iq
+*.prg
+*.prg.debug.xml
+.settings/
+.project
+.buildpath
+developer_key.*

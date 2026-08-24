@@ -1,0 +1,27 @@
+project.manifest = manifest.xml
+
+# Shared baseline.
+base.sourcePath = source
+
+# ---------------------------------------------------------------------------
+# Launcher icon size varies per device, and monkeyc warns when it has to
+# rescale. Each size gets its own resource folder containing nothing but a
+# drawables.xml overriding LauncherIcon, so the icon is drawn at native
+# resolution rather than resampled from the 40x40 default in resources/.
+#
+# Devices at 40x40 need no entry - they use the default.
+# ---------------------------------------------------------------------------
+vivoactive4s.resourcePath    = $(vivoactive4s.resourcePath);resources-icon30
+vivoactive4.resourcePath     = $(vivoactive4.resourcePath);resources-icon35
+vivoactive5.resourcePath     = $(vivoactive5.resourcePath);resources-icon56
+
+fenix843mm.resourcePath      = $(fenix843mm.resourcePath);resources-icon60
+epix2.resourcePath           = $(epix2.resourcePath);resources-icon60
+epix2pro42mm.resourcePath    = $(epix2pro42mm.resourcePath);resources-icon60
+epix2pro47mm.resourcePath    = $(epix2pro47mm.resourcePath);resources-icon60
+epix2pro51mm.resourcePath    = $(epix2pro51mm.resourcePath);resources-icon60
+
+fenix847mm.resourcePath      = $(fenix847mm.resourcePath);resources-icon65
+
+# Colour and burn-in handling is runtime (Theme.mc), so the MIP/AMOLED split
+# needs no resource fork. Layout forks would go here if one is ever required.

@@ -1,0 +1,119 @@
+<settings>
+
+    <group id="display" title="@Strings.SettingsDisplay">
+        <setting propertyKey="@Properties.slotPrimary" title="@Strings.SlotPrimary">
+            <settingConfig type="list">
+            <listEntry value="0">@Strings.FieldEmpty</listEntry>
+            <listEntry value="1">@Strings.FieldSpeed</listEntry>
+            <listEntry value="2">@Strings.FieldBattery</listEntry>
+            <listEntry value="3">@Strings.FieldTrip</listEntry>
+            <listEntry value="4">@Strings.FieldMotorTemp</listEntry>
+            <listEntry value="5">@Strings.FieldVolts</listEntry>
+            <listEntry value="6">@Strings.FieldHeadroom</listEntry>
+            <listEntry value="7">@Strings.FieldRideTime</listEntry>
+            <listEntry value="8">@Strings.FieldMaxSpeed</listEntry>
+            <listEntry value="9">@Strings.FieldAvgSpeed</listEntry>
+            <listEntry value="10">@Strings.FieldWatchBatt</listEntry>
+            <listEntry value="11">@Strings.FieldClock</listEntry>
+            <listEntry value="12">@Strings.FieldHeartRate</listEntry>
+            <listEntry value="13">@Strings.FieldRpm</listEntry>
+            </settingConfig>
+        </setting>
+        <setting propertyKey="@Properties.slotLeft" title="@Strings.SlotLeft">
+            <settingConfig type="list">
+            <listEntry value="0">@Strings.FieldEmpty</listEntry>
+            <listEntry value="1">@Strings.FieldSpeed</listEntry>
+            <listEntry value="2">@Strings.FieldBattery</listEntry>
+            <listEntry value="3">@Strings.FieldTrip</listEntry>
+            <listEntry value="4">@Strings.FieldMotorTemp</listEntry>
+            <listEntry value="5">@Strings.FieldVolts</listEntry>
+            <listEntry value="6">@Strings.FieldHeadroom</listEntry>
+            <listEntry value="7">@Strings.FieldRideTime</listEntry>
+            <listEntry value="8">@Strings.FieldMaxSpeed</listEntry>
+            <listEntry value="9">@Strings.FieldAvgSpeed</listEntry>
+            <listEntry value="10">@Strings.FieldWatchBatt</listEntry>
+            <listEntry value="11">@Strings.FieldClock</listEntry>
+            <listEntry value="12">@Strings.FieldHeartRate</listEntry>
+            <listEntry value="13">@Strings.FieldRpm</listEntry>
+            </settingConfig>
+        </setting>
+        <setting propertyKey="@Properties.slotRight" title="@Strings.SlotRight">
+            <settingConfig type="list">
+            <listEntry value="0">@Strings.FieldEmpty</listEntry>
+            <listEntry value="1">@Strings.FieldSpeed</listEntry>
+            <listEntry value="2">@Strings.FieldBattery</listEntry>
+            <listEntry value="3">@Strings.FieldTrip</listEntry>
+            <listEntry value="4">@Strings.FieldMotorTemp</listEntry>
+            <listEntry value="5">@Strings.FieldVolts</listEntry>
+            <listEntry value="6">@Strings.FieldHeadroom</listEntry>
+            <listEntry value="7">@Strings.FieldRideTime</listEntry>
+            <listEntry value="8">@Strings.FieldMaxSpeed</listEntry>
+            <listEntry value="9">@Strings.FieldAvgSpeed</listEntry>
+            <listEntry value="10">@Strings.FieldWatchBatt</listEntry>
+            <listEntry value="11">@Strings.FieldClock</listEntry>
+            <listEntry value="12">@Strings.FieldHeartRate</listEntry>
+            <listEntry value="13">@Strings.FieldRpm</listEntry>
+            </settingConfig>
+        </setting>
+        <setting propertyKey="@Properties.slotBottom" title="@Strings.SlotBottom">
+            <settingConfig type="list">
+            <listEntry value="0">@Strings.FieldEmpty</listEntry>
+            <listEntry value="1">@Strings.FieldSpeed</listEntry>
+            <listEntry value="2">@Strings.FieldBattery</listEntry>
+            <listEntry value="3">@Strings.FieldTrip</listEntry>
+            <listEntry value="4">@Strings.FieldMotorTemp</listEntry>
+            <listEntry value="5">@Strings.FieldVolts</listEntry>
+            <listEntry value="6">@Strings.FieldHeadroom</listEntry>
+            <listEntry value="7">@Strings.FieldRideTime</listEntry>
+            <listEntry value="8">@Strings.FieldMaxSpeed</listEntry>
+            <listEntry value="9">@Strings.FieldAvgSpeed</listEntry>
+            <listEntry value="10">@Strings.FieldWatchBatt</listEntry>
+            <listEntry value="11">@Strings.FieldClock</listEntry>
+            <listEntry value="12">@Strings.FieldHeartRate</listEntry>
+            <listEntry value="13">@Strings.FieldRpm</listEntry>
+            </settingConfig>
+        </setting>
+        <setting propertyKey="@Properties.showBatteryArc" title="@Strings.ShowBatteryArc">
+            <settingConfig type="boolean"/>
+        </setting>
+    </group>
+
+    <group id="alerts" title="@Strings.SettingsAlerts">
+        <setting propertyKey="@Properties.alertsEnabled" title="@Strings.AlertsEnabled">
+            <settingConfig type="boolean"/>
+        </setting>
+        <setting propertyKey="@Properties.battWarnPct" title="@Strings.BattWarnPct">
+            <settingConfig type="numeric" min="1" max="99"/>
+        </setting>
+        <setting propertyKey="@Properties.battCritPct" title="@Strings.BattCritPct">
+            <settingConfig type="numeric" min="1" max="99"/>
+        </setting>
+        <setting propertyKey="@Properties.headroomWarn" title="@Strings.HeadroomWarn">
+            <settingConfig type="numeric" min="1" max="99"/>
+        </setting>
+        <setting propertyKey="@Properties.headroomCrit" title="@Strings.HeadroomCrit">
+            <settingConfig type="numeric" min="1" max="99"/>
+        </setting>
+        <setting propertyKey="@Properties.tempWarnC" title="@Strings.TempWarnC">
+            <settingConfig type="numeric" min="20" max="120"/>
+        </setting>
+        <setting propertyKey="@Properties.tempCritC" title="@Strings.TempCritC">
+            <settingConfig type="numeric" min="20" max="120"/>
+        </setting>
+    </group>
+
+    <group id="board" title="@Strings.SettingsBoard">
+        <setting propertyKey="@Properties.tireCircumferenceIn"
+                 title="@Strings.TireCircumference"
+                 prompt="@Strings.TireCircumferencePrompt">
+            <settingConfig type="numeric" min="20" max="60"/>
+        </setting>
+    </group>
+
+    <group id="recording" title="@Strings.SettingsRecording">
+        <setting propertyKey="@Properties.autoStartRecording" title="@Strings.AutoStartRecording">
+            <settingConfig type="boolean"/>
+        </setting>
+    </group>
+
+</settings>

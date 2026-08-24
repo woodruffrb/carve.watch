@@ -1,0 +1,22 @@
+<properties>
+    <!-- Display slots. Values are Fields.F_* ids; see source/ui/Fields.mc. -->
+    <property id="slotPrimary" type="number">1</property>
+    <property id="slotLeft"    type="number">2</property>
+    <property id="slotRight"   type="number">3</property>
+    <property id="slotBottom"  type="number">7</property>
+    <property id="showBatteryArc" type="boolean">true</property>
+
+    <!-- Alert thresholds -->
+    <property id="alertsEnabled" type="boolean">true</property>
+    <property id="battWarnPct"   type="number">20</property>
+    <property id="battCritPct"   type="number">10</property>
+    <property id="tempWarnC"     type="number">60</property>
+    <property id="tempCritC"     type="number">75</property>
+    <property id="headroomWarn"  type="number">25</property>
+    <property id="headroomCrit"  type="number">10</property>
+
+    <!-- Board. Default is the XR rollout; see docs/PROTOCOL.md. -->
+    <property id="tireCircumferenceIn" type="number">35</property>
+
+    <property id="autoStartRecording" type="boolean">true</property>
+</properties>

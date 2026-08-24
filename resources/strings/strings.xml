@@ -1,0 +1,48 @@
+<strings>
+    <string id="AppName">carve</string>
+
+    <!-- Settings group titles -->
+    <string id="SettingsDisplay">Display</string>
+    <string id="SettingsAlerts">Alerts</string>
+    <string id="SettingsBoard">Board</string>
+    <string id="SettingsRecording">Recording</string>
+
+    <!-- Slots -->
+    <string id="SlotPrimary">Main field</string>
+    <string id="SlotLeft">Lower left</string>
+    <string id="SlotRight">Lower right</string>
+    <string id="SlotBottom">Bottom field</string>
+    <string id="ShowBatteryArc">Battery arc</string>
+
+    <!-- Field names -->
+    <string id="FieldEmpty">Empty</string>
+    <string id="FieldSpeed">Speed</string>
+    <string id="FieldBattery">Board battery</string>
+    <string id="FieldTrip">Trip distance</string>
+    <string id="FieldMotorTemp">Motor temp</string>
+    <string id="FieldVolts">Pack voltage</string>
+    <string id="FieldHeadroom">Safety headroom</string>
+    <string id="FieldRideTime">Ride time</string>
+    <string id="FieldMaxSpeed">Max speed</string>
+    <string id="FieldAvgSpeed">Average speed</string>
+    <string id="FieldWatchBatt">Watch battery</string>
+    <string id="FieldClock">Time of day</string>
+    <string id="FieldHeartRate">Heart rate</string>
+    <string id="FieldRpm">Wheel RPM</string>
+
+    <!-- Alerts -->
+    <string id="AlertsEnabled">Enable alerts</string>
+    <string id="BattWarnPct">Battery warning %</string>
+    <string id="BattCritPct">Battery critical %</string>
+    <string id="TempWarnC">Motor warning C</string>
+    <string id="TempCritC">Motor critical C</string>
+    <string id="HeadroomWarn">Headroom warning %</string>
+    <string id="HeadroomCrit">Headroom critical %</string>
+
+    <!-- Board -->
+    <string id="TireCircumference">Tire circumference (in)</string>
+    <string id="TireCircumferencePrompt">Measured rollout of one wheel revolution. Raise this if the watch reads slow against GPS.</string>
+
+    <!-- Recording -->
+    <string id="AutoStartRecording">Auto-start recording</string>
+</strings>
