@@ -95,6 +95,55 @@ class BoardState {
     function clearTelemetry() {
         _values = {};
         _stamps = {};
+        _raw = {};
+        _rawChanged = {};
+    }
+
+    // =====================================================================
+    // Raw store - diagnostics only
+    // =====================================================================
+    //
+    // Keeps the undecoded bytes for every characteristic that registered,
+    // including ones with no known meaning. This is what lets Diagnostics
+    // identify a value by behaviour: spin the wheel, see which cell moves.
+    //
+    // Deliberately separate from the decoded store. Decoded values are what
+    // the app believes; these are what the board actually said, and the whole
+    // point is being able to tell those apart when a guess is wrong.
+
+    //! How long a value stays flagged as recently-changed. Long enough to
+    //! catch it after looking down at the watch, short enough that it settles.
+    static const CHANGE_HIGHLIGHT_MS = 3000;
+
+    private var _raw as Lang.Dictionary = {};
+    private var _rawChanged as Lang.Dictionary = {};
+
+    function putRaw(shortForm as Lang.String, bytes as Lang.ByteArray) as Void {
+        var prev = _raw[shortForm];
+        if (prev == null || !bytesEqual(prev, bytes)) {
+            _rawChanged[shortForm] = System.getTimer();
+        }
+        _raw[shortForm] = bytes;
+    }
+
+    function getRaw(shortForm as Lang.String) as Lang.ByteArray? {
+        return _raw[shortForm];
+    }
+
+    //! True if this characteristic's bytes changed in the last few seconds.
+    function rawChangedRecently(shortForm as Lang.String) as Lang.Boolean {
+        var t = _rawChanged[shortForm];
+        if (t == null) { return false; }
+        return (System.getTimer() - t) < CHANGE_HIGHLIGHT_MS;
+    }
+
+    private function bytesEqual(a as Lang.ByteArray?, b as Lang.ByteArray?) as Lang.Boolean {
+        if (a == null || b == null) { return false; }
+        if (a.size() != b.size()) { return false; }
+        for (var i = 0; i < a.size(); i++) {
+            if (a[i] != b[i]) { return false; }
+        }
+        return true;
     }
 
     function allKeys() {

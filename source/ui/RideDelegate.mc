@@ -91,8 +91,9 @@ class RideMenuDelegate extends WatchUi.Menu2InputDelegate {
             WatchUi.popView(WatchUi.SLIDE_DOWN);
 
         } else if (id == :diagnostics) {
-            WatchUi.pushView(new DiagnosticsView(_link),
-                new DiagnosticsDelegate(), WatchUi.SLIDE_LEFT);
+            var view = new DiagnosticsView(_link);
+            WatchUi.pushView(view, new DiagnosticsDelegate(view),
+                WatchUi.SLIDE_LEFT);
         }
     }
 

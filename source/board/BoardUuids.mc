@@ -31,19 +31,49 @@ module BoardUuids {
     const UART_READ      = "e659f3fe";
     const UART_WRITE     = "e659f3ff";
 
-    //! Characteristics registered with the BLE profile.
+    //! Registration tiers, widest first.
     //!
-    //! Connect IQ caps how much can be registered, and every entry costs
-    //! memory whether or not it is subscribed. This is the deliberate minimum
-    //! for the shipped field set plus the handshake - if you add a field to
-    //! Fields.mc that needs a new characteristic, add it here too, then
-    //! re-test on hardware. Registration failure surfaces as
-    //! BoardLink.STATE_PROFILE_FAILED rather than a silent dead connection.
-    function registeredCharacteristics() as Lang.Array {
+    //! Connect IQ caps how much can be registered and the exact limit is
+    //! undocumented, so rather than guess a safe number, BoardLink tries these
+    //! in order and falls back on failure. Tier 0 sweeps the board's entire
+    //! characteristic range, which is what lets Diagnostics identify a value
+    //! by behaviour when a UUID guess is wrong. Tier 2 is the minimum the
+    //! shipped field set needs.
+    //!
+    //! Returns null past the last tier, which BoardLink treats as fatal.
+    function tier(index as Lang.Number) as Lang.Array? {
+        if (index == 0) { return fullSweep(); }
+        if (index == 1) { return halfSweep(); }
+        if (index == 2) { return essential(); }
+        return null;
+    }
+
+    //! Every characteristic the board exposes, f301 through f320, plus the
+    //! UART pair. Confirmed contiguous by GATT dump.
+    function fullSweep() as Lang.Array {
+        return sweepTo(0x20);
+    }
+
+    function halfSweep() as Lang.Array {
+        return sweepTo(0x13);
+    }
+
+    // Module scope has no `private` in Monkey C; this is internal by convention.
+    function sweepTo(last as Lang.Number) as Lang.Array {
+        var list = [ UART_READ, UART_WRITE ];
+        for (var i = 0x01; i <= last; i++) {
+            list.add("e659f3" + i.format("%02x"));
+        }
+        return list;
+    }
+
+    //! The minimum for normal operation: the handshake pair plus the
+    //! characteristics the shipped fields actually read.
+    function essential() as Lang.Array {
         return [
-            FIRMWARE_REV,
             UART_READ,
             UART_WRITE,
+            FIRMWARE_REV,
             BATTERY_PCT,
             RPM,
             TRIP_ODOMETER,
@@ -52,6 +82,12 @@ module BoardUuids {
             BATTERY_VOLTS,
             SAFETY_HEADROOM
         ];
+    }
+
+    //! Short label for a characteristic, used by the raw diagnostics grid.
+    //! "e659f30b" renders as "0b".
+    function shortLabel(uuidShort as Lang.String) as Lang.String {
+        return uuidShort.substring(6, 8);
     }
 
     //! Characteristics we subscribe to rather than poll.

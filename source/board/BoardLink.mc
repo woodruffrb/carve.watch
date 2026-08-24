@@ -35,6 +35,11 @@ class BoardLink extends Ble.BleDelegate {
 
     static const MAX_QUEUE_DEPTH = 8;
 
+    //! Reads issued per tick. Enough to cycle the full 32-characteristic
+    //! sweep in a few seconds so a value visibly reacts to spinning the
+    //! wheel; the queue bound stops it running away.
+    static const POLLS_PER_TICK = 4;
+
     private var _state = STATE_IDLE;
     private var _device = null;
     private var _profileReady = false;
@@ -48,21 +53,30 @@ class BoardLink extends Ble.BleDelegate {
 
     private var _boardState;
     private var _pollCursor = 0;
-    private var _pollList as Lang.Array;
+    private var _pollList as Lang.Array = [];
+
+    private var _tierIndex = 0;
+    private var _registered as Lang.Array = [];
+
+    // ---- handshake instrumentation --------------------------------------
+    // Read by DiagnosticsView. Without these a stalled handshake is opaque:
+    // "no telemetry" looks identical whether the challenge never arrived, or
+    // arrived malformed, or was answered and rejected.
+    private var _rxTotal = 0;          // UART bytes received since connect
+    private var _challengesSeen = 0;   // well-formed CRX frames
+    private var _badFrames = 0;        // frames that failed the checksum
+    private var _responsesSent = 0;
 
     function initialize(boardState) {
         BleDelegate.initialize();
         _boardState = boardState;
-
-        // Polled round-robin, one per tick. Everything else arrives by
-        // subscription.
-        _pollList = [
-            BoardUuids.TRIP_ODOMETER,
-            BoardUuids.TEMPERATURE,
-            BoardUuids.BATTERY_VOLTS,
-            BoardUuids.SAFETY_HEADROOM
-        ];
     }
+
+    function getRxTotal()        as Lang.Number { return _rxTotal; }
+    function getChallengesSeen() as Lang.Number { return _challengesSeen; }
+    function getBadFrames()      as Lang.Number { return _badFrames; }
+    function getResponsesSent()  as Lang.Number { return _responsesSent; }
+    function getUnlockAttempts() as Lang.Number { return _unlockAttempts; }
 
     function getState()      { return _state; }
     function getBoardState() { return _boardState; }
@@ -71,20 +85,41 @@ class BoardLink extends Ble.BleDelegate {
     // Lifecycle
     // =====================================================================
 
-    //! Register the GATT profile. Must happen exactly once per app lifetime,
-    //! before any connection, and must complete before scanning is useful.
+    //! Register the GATT profile, widest tier that the device accepts.
+    //!
+    //! Connect IQ's registration limit is undocumented, so instead of picking
+    //! a number and hoping, this walks BoardUuids.tier() from widest to
+    //! narrowest until one sticks. Failure arrives by two different routes -
+    //! a synchronous throw, or a non-success status in onProfileRegister - so
+    //! both funnel back into the same fallback.
+    //!
+    //! The widest tier that registers is what Diagnostics can show, which is
+    //! why this tries hard rather than settling for the minimum.
     function registerProfiles() {
+        tryRegisterTier(0);
+    }
+
+    private function tryRegisterTier(index as Lang.Number) as Void {
+        var shortForms = BoardUuids.tier(index);
+        if (shortForms == null) {
+            // Even the minimum was refused. Nothing further to try.
+            _state = STATE_PROFILE_FAILED;
+            return;
+        }
+
+        _tierIndex = index;
+        _registered = shortForms;
+
         var chars = [];
-        var shortForms = BoardUuids.registeredCharacteristics();
         var notify = BoardUuids.notifyCharacteristics();
 
         for (var i = 0; i < shortForms.size(); i++) {
             var short = shortForms[i] as Lang.String;
             var entry = { :uuid => BoardUuids.uuid(short) };
 
-            // Only characteristics we actually subscribe to get a CCCD
-            // registered. Descriptors are not free and the registration
-            // budget is the binding constraint here.
+            // Only characteristics we subscribe to get a CCCD. Descriptors are
+            // not free, and on the wide tiers they are what would push the
+            // registration over the limit.
             if (needsCccd(short, notify)) {
                 entry[:descriptors] = [ Ble.cccdUuid() ];
             }
@@ -97,12 +132,15 @@ class BoardLink extends Ble.BleDelegate {
                 :characteristics => chars
             });
         } catch (ex) {
-            // Thrown when the registration budget is exceeded. Surfacing this
-            // as a state rather than swallowing it is what makes an over-long
-            // characteristic list debuggable instead of mysterious.
-            _state = STATE_PROFILE_FAILED;
+            tryRegisterTier(index + 1);
         }
     }
+
+    //! Which characteristics actually registered, and at which tier. Shown in
+    //! Diagnostics so a narrow sweep is visible rather than looking like
+    //! missing data.
+    function getRegistered() as Lang.Array { return _registered; }
+    function getTierIndex() as Lang.Number { return _tierIndex; }
 
     private function needsCccd(short as Lang.String, notifyList as Lang.Array) as Lang.Boolean {
         if (short.equals(BoardUuids.UART_READ)) { return true; }
@@ -166,13 +204,33 @@ class BoardLink extends Ble.BleDelegate {
         pump();
     }
 
-    //! One polled characteristic per tick, round robin. Reading all four every
-    //! second outpaces what the queue drains and starves the handshake.
+    //! Round-robin poll across everything registered.
+    //!
+    //! Reads several per tick rather than one. On the wide sweep tier a
+    //! one-per-second cursor takes half a minute to get round the range,
+    //! which is far too slow to watch a value react to spinning the wheel.
+    //! The queue bound is what actually limits the rate.
     private function pollNext() {
         if (_pollList.size() == 0) { return; }
-        var short = _pollList[_pollCursor % _pollList.size()] as Lang.String;
-        _pollCursor++;
-        enqueue({ :kind => :read, :char => short });
+
+        for (var n = 0; n < POLLS_PER_TICK; n++) {
+            var short = _pollList[_pollCursor % _pollList.size()] as Lang.String;
+            _pollCursor++;
+            enqueue({ :kind => :read, :char => short });
+        }
+    }
+
+    //! Everything registered except the UART pair, which is not polled -
+    //! the read side is notify-only and the write side is write-only.
+    private function buildPollList() as Void {
+        _pollList = [];
+        for (var i = 0; i < _registered.size(); i++) {
+            var short = _registered[i] as Lang.String;
+            if (short.equals(BoardUuids.UART_READ)) { continue; }
+            if (short.equals(BoardUuids.UART_WRITE)) { continue; }
+            _pollList.add(short);
+        }
+        _pollCursor = 0;
     }
 
     // =====================================================================
@@ -184,6 +242,22 @@ class BoardLink extends Ble.BleDelegate {
         // piling on more reads makes recovery slower rather than faster.
         if (_queue.size() >= MAX_QUEUE_DEPTH) { return; }
         _queue.add(op);
+        pump();
+    }
+
+    //! Handshake traffic jumps the queue and ignores the depth bound.
+    //!
+    //! This is not an optimisation. Polling can fill the queue, and if a
+    //! keepalive write got dropped for being one op too many, the board would
+    //! freeze its telemetry 24 seconds later - an intermittent failure that
+    //! would look like a flaky radio and be miserable to diagnose. The
+    //! handshake must never lose to a poll.
+    private function enqueuePriority(op as Lang.Dictionary) as Void {
+        var next = [ op ];
+        for (var i = 0; i < _queue.size(); i++) {
+            next.add(_queue[i]);
+        }
+        _queue = next;
         pump();
     }
 
@@ -246,12 +320,12 @@ class BoardLink extends Ble.BleDelegate {
     private function requestChallenge() {
         var fw = _boardState.peek(BoardState.FIRMWARE);
         if (fw == null) {
-            enqueue({ :kind => :read, :char => BoardUuids.FIRMWARE_REV });
+            enqueuePriority({ :kind => :read, :char => BoardUuids.FIRMWARE_REV });
             return;
         }
         _rxBuffer = []b;
         _lastUnlockMs = System.getTimer();
-        enqueue({
+        enqueuePriority({
             :kind  => :write,
             :char  => BoardUuids.FIRMWARE_REV,
             :value => encodeUint16(fw)
@@ -262,6 +336,7 @@ class BoardLink extends Ble.BleDelegate {
     //! The board splits the challenge across packets, so a single
     //! onCharacteristicChanged is not a frame.
     private function onUartBytes(value as Lang.ByteArray) as Void {
+        _rxTotal += value.size();
         _rxBuffer = _rxBuffer.addAll(value);
 
         if (_rxBuffer.size() < Unlock.FRAME_LEN) { return; }
@@ -272,14 +347,17 @@ class BoardLink extends Ble.BleDelegate {
         if (!Unlock.frameIsIntact(frame)) {
             // Reassembly went wrong, or this was not a challenge. Let the
             // keepalive timer retry rather than hammering the board.
+            _badFrames++;
             return;
         }
+        _challengesSeen++;
 
         var response = Unlock.buildResponse(frame);
         if (response == null) { return; }
 
         _unlockAttempts++;
-        enqueue({
+        _responsesSent++;
+        enqueuePriority({
             :kind  => :write,
             :char  => BoardUuids.UART_WRITE,
             :value => response
@@ -293,12 +371,16 @@ class BoardLink extends Ble.BleDelegate {
     //! Registration is asynchronous, so this - not app startup - is where
     //! scanning actually begins. The startScan() call in onStart runs before
     //! this fires and deliberately no-ops.
+    //!
+    //! A non-success status is the other way an over-wide tier fails, so it
+    //! falls back rather than giving up. tryRegisterTier gives up on its own
+    //! once the tiers are exhausted.
     function onProfileRegister(uuid, status) {
         if (status == Ble.STATUS_SUCCESS) {
             _profileReady = true;
             startScan();
         } else {
-            _state = STATE_PROFILE_FAILED;
+            tryRegisterTier(_tierIndex + 1);
         }
     }
 
@@ -354,6 +436,15 @@ class BoardLink extends Ble.BleDelegate {
             _lastUnlockMs = System.getTimer();
             _queue = [];
             _busy = false;
+
+            // Counters are per-connection; carrying them across a reconnect
+            // would make Diagnostics misleading about the current attempt.
+            _rxTotal = 0;
+            _challengesSeen = 0;
+            _badFrames = 0;
+            _responsesSent = 0;
+
+            buildPollList();
 
             // Documented order: read the firmware revision, subscribe to the
             // UART characteristic, then echo the revision back to provoke a
@@ -423,6 +514,12 @@ class BoardLink extends Ble.BleDelegate {
     private function decode(uuid as Ble.Uuid, value as Lang.ByteArray?) as Void {
         if (value == null || value.size() == 0) { return; }
 
+        // Stash the undecoded bytes first, for every characteristic including
+        // the ones with no known meaning. This is what Diagnostics shows, and
+        // it is deliberately independent of whether the decode below has any
+        // idea what this characteristic is.
+        captureRaw(uuid, value);
+
         if (uuid.equals(BoardUuids.uuid(BoardUuids.BATTERY_PCT))) {
             _boardState.put(BoardState.BATTERY_PCT, value[0]);
 
@@ -448,6 +545,21 @@ class BoardLink extends Ble.BleDelegate {
 
         } else if (uuid.equals(BoardUuids.uuid(BoardUuids.FIRMWARE_REV))) {
             _boardState.put(BoardState.FIRMWARE, u16(value));
+        }
+    }
+
+    //! Map a UUID back to its short form and store the raw bytes.
+    //!
+    //! Walks the registered list rather than reversing the UUID, because
+    //! Ble.Uuid exposes no way to get its string back. The list is at most 34
+    //! entries and this runs on a read completion, not per frame.
+    private function captureRaw(uuid as Ble.Uuid, value as Lang.ByteArray) as Void {
+        for (var i = 0; i < _registered.size(); i++) {
+            var short = _registered[i] as Lang.String;
+            if (uuid.equals(BoardUuids.uuid(short))) {
+                _boardState.putRaw(short, value);
+                return;
+            }
         }
     }
 
