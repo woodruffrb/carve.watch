@@ -49,10 +49,21 @@ module BoardUuids {
     //! never as the first attempt.
     //!
     //! Returns null past the last tier, which BoardLink treats as fatal.
+    //! Widest first, because discovery is the point again.
+    //!
+    //! The full sweep was dropped while chasing a registration failure that
+    //! turned out to be a wrong device target - so "34 characteristics is too
+    //! many" was never actually tested on the right hardware and is not a
+    //! finding. Registration now works, and without the sweep the raw
+    //! diagnostics can only show characteristics already guessed at, which is
+    //! useless for confirming a map that is mostly unverified.
+    //!
+    //! The timeout fallback handles a refusal, so trying wide costs a few
+    //! seconds at worst.
     function tier(index as Lang.Number) as Lang.Array? {
-        if (index == 0) { return essential(); }   // 10 - app functional
-        if (index == 1) { return minimal(); }     //  6 - handshake + core
-        if (index == 2) { return minimal(); }     //  6 - and no descriptors
+        if (index == 0) { return sweepTo(0x20); }  // 34 - full discovery
+        if (index == 1) { return sweepTo(0x13); }  // 21 - half
+        if (index == 2) { return essential(); }    // 10 - app functional
         return null;
     }
 

@@ -68,7 +68,7 @@ class BoardLink extends Ble.BleDelegate {
     //! Reads issued per tick. Enough to cycle the full 32-characteristic
     //! sweep in a few seconds so a value visibly reacts to spinning the
     //! wheel; the queue bound stops it running away.
-    static const POLLS_PER_TICK = 4;
+    static const POLLS_PER_TICK = 6;
 
     //! How long to wait for onProfileRegister before assuming the request was
     //! dropped.
@@ -100,7 +100,7 @@ class BoardLink extends Ble.BleDelegate {
     //!
     //! If this rung is the one that registers, descriptors are the fault.
     //! The cost is that nothing can be subscribed, so everything is polled.
-    static const TIER_WITHOUT_DESCRIPTORS = 2;
+    static const TIER_WITHOUT_DESCRIPTORS = 99;
 
     private var _state = STATE_IDLE;
     private var _device = null;
